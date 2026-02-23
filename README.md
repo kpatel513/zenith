@@ -1,153 +1,210 @@
 # Zenith
 
-Git workflow automation for teams working in GitHub monorepos with mixed git skill levels and heavy Claude Code usage.
+You write code. Your team shares one repo. Git is in the way.
 
-## What It Does
+Zenith is a Claude Code command that lets you describe what you want in plain English and handles all the git operations safely — branching, saving, syncing, pushing, and creating PRs.
 
-Zenith runs as a single Claude Code slash command: `/zenith`. You describe what you want in plain English. Zenith reads actual repo state, determines the correct sequence of operations, and executes them safely.
+```
+/zenith start new feature for the login page
+/zenith save my work "add input validation"
+/zenith push
+```
 
-Zenith encodes specific expertise about monorepo git workflows, ML project conventions, and safety rules. It prevents cross-folder contamination, detects risky file patterns, and handles conflicts intelligently.
+---
 
-## Requirements
+## Who It's For
 
-- git
-- bash
-- Claude Code
-- cron (for automatic updates)
-- GitHub repository
+Teams where multiple people work in a single shared repo with subfolders per team or project:
 
-## Installation
+```
+company-repo/
+├── team-payments/
+│   └── checkout-service/    ← one person's work lives here
+├── team-ml/
+│   └── recommendations/     ← another person's work lives here
+└── platform/
+    └── infra/
+```
 
-### Prerequisites
+Zenith knows which folder is yours. It only commits files from your folder, warns you if anything else changed, and blocks dangerous operations like committing directly to `main`.
 
-- [Claude Code](https://claude.ai/code) installed and working
-- git 2.23+
-- A GitHub repository you can push to
-- bash (macOS and Linux)
+---
 
-### Steps
+## Before You Install
 
-**1. Run the setup script**
+- [Claude Code](https://claude.ai/code) installed and working (`claude --version` to check)
+- git 2.23 or later (`git --version` to check)
+- A GitHub repo you have push access to
+- macOS or Linux (bash required)
+
+---
+
+## Install
+
+Run this from your terminal — anywhere, not inside the repo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/your-org/zenith/main/scripts/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/kpatel513/zenith/main/scripts/setup.sh | bash
 ```
 
-**2. Enter your monorepo path when prompted**
+The script asks four questions. Here's what each one means.
+
+---
+
+**Question 1 — Where is your repo?**
 
 ```
-Monorepo absolute path: /Users/you/code/your-monorepo
+Repo absolute path: /Users/alice/code/company-repo
 ```
 
-This must be the root of your local git clone.
+This is the root folder of your local git clone — the directory that contains the `.git/` folder.
 
-**3. Enter your project folder**
+Not sure what path to enter? Run this inside your repo:
+
+```bash
+git rev-parse --show-toplevel
+```
+
+It prints the exact path to paste in.
+
+---
+
+**Question 2 — Which folder is yours?**
 
 ```
-Your project folder name: team-alpha/ml-pipeline
+Your project folder: team-ml/recommendations
 ```
 
-This is the folder inside the monorepo where your work lives. Zenith will scope all git operations to this folder and warn you if changes appear outside it.
+This is the subfolder where your work lives, relative to the repo root. Zenith scopes everything to this folder — commits, diffs, contamination checks.
 
-**4. Enter your GitHub details**
+Examples:
+- `team-alpha/backend`
+- `ml/training-pipeline`
+- `services/auth`
+
+If you work across the entire repo with no specific subfolder, enter `.`
+
+---
+
+**Question 3 — Your GitHub details**
 
 ```
-GitHub organization: your-org
-GitHub repository:   your-repo
+GitHub organization: acme-corp
+GitHub repository:   company-repo
 Base branch [main]:  main
-GitHub username:     your-github-username
+GitHub username:     alice
 ```
 
-**5. Verify installation**
+- **Organization** — the account or org name in your GitHub URL: `github.com/acme-corp/...`
+- **Repository** — the repo name: `github.com/acme-corp/company-repo`
+- **Base branch** — the branch your team merges into, almost always `main`
+- **Username** — your GitHub handle, used to track your branches
 
-Open Claude Code in your monorepo and run:
+Press Enter on base branch to accept `main` as the default.
+
+---
+
+**Verify it worked**
+
+Open Claude Code from your repo root and run:
 
 ```
 /zenith help
 ```
 
-You should see a table of available commands. If you see `Unknown command: zenith`, the symlink wasn't created — re-run the setup script.
+You'll see a table listing everything Zenith can do. If Claude says it doesn't recognize `zenith`, the setup didn't complete — re-run the script.
 
-### What the script does
+---
 
-- Clones Zenith to `~/.zenith`
-- Creates `.claude/commands/zenith.md` in your monorepo as a symlink to `~/.zenith/.claude/commands/zenith.md`
-- Writes a `.agent-config` file at your monorepo root (gitignored automatically)
-- Installs a daily cron job (`0 9 * * *`) to keep Zenith up to date silently
+### What setup does
 
-### Reinstalling or reconfiguring
+- Installs Zenith to `~/.zenith` on your machine
+- Creates `.claude/commands/zenith.md` in your repo pointing to `~/.zenith` — this is what makes `/zenith` work
+- Writes `.agent-config` at your repo root with your settings (automatically excluded from git commits)
+- Installs a daily background update so Zenith stays current
 
-The script is idempotent — running it again on a fresh machine won't break anything. To reconfigure an existing install, edit `.agent-config` directly at your monorepo root.
+### New machine or reinstalling?
 
-## Usage
+The setup script is safe to re-run. It won't overwrite an existing install or duplicate entries. To change a setting after setup, edit `.agent-config` at your repo root directly.
 
-Everything goes through `/zenith` in plain English.
+---
 
-**Start new work:**
-```
-/zenith start new feature
-```
-Creates and pushes a new feature branch from main. Names it based on your description.
+## Using Zenith
 
-**Continue existing work:**
-```
-/zenith continue my work
-```
-Shows your recent branches, lets you pick one, shows what's new on main since you last worked.
+Everything goes through `/zenith` in plain English. You don't have to memorize exact phrases — Zenith infers intent from context.
 
-**Save your changes:**
-```
-/zenith save my work
-```
-Runs contamination check, stages your project folder, shows what will be committed, commits with your message.
+| Say this | What happens |
+|----------|-------------|
+| `start new feature` | Creates a branch from main, pushes it, tells you where to work |
+| `continue my work` | Shows your recent branches, switches to the one you pick |
+| `work on their branch` | Checks out a teammate's branch and shows recent activity |
+| `what did I change` | Shows your uncommitted changes scoped to your folder |
+| `scope check` | Verifies you haven't changed files outside your folder |
+| `what's staged` | Shows what's queued for the next commit |
+| `save my work` | Commits your changes after a safety check |
+| `sync with main` | Rebases your branch onto latest main |
+| `push` | Commits (if needed), syncs, pushes, and shows the PR link |
+| `update my PR` | Adds new commits to an existing open PR |
+| `how behind am I` | Lists commits on main you don't have yet |
+| `what changed today` | Shows what teammates pushed to main recently |
+| `undo last commit` | Removes the last commit, keeps your changes unstaged |
+| `throw away changes` | Permanently discards all uncommitted changes |
+| `unstage a file` | Removes a specific file from the staging area |
+| `forgot a file` | Adds a missed file to your last commit |
+| `fix commit message` | Corrects the message on your last commit |
+| `split commits` | Separates staged changes into two separate commits |
+| `push failed` | Diagnoses why push was rejected and fixes it |
+| `help` | Shows this table |
 
-**Sync with main:**
-```
-/zenith sync with main
-```
-Fetches latest, shows incoming commits, rebases onto main with intelligent conflict resolution.
+---
 
-**Push and create PR:**
-```
-/zenith push
-```
-Syncs with main, stages and commits if needed, pushes to remote, shows PR URL.
+## Your Settings
 
-**Check what you changed:**
-```
-/zenith what did I change
-```
-Shows uncommitted changes in your project folder, flags changes outside your folder if any.
-
-## Configuration
-
-After setup, `.agent-config` lives at your monorepo root:
+After setup, `.agent-config` lives at your repo root. It's excluded from git — each team member has their own copy.
 
 ```ini
 [repo]
-github_org = "your-org"
-github_repo = "your-repo"
-base_branch = "main"
+github_org    = "acme-corp"
+github_repo   = "company-repo"
+base_branch   = "main"
 
 [user]
-project_folder = "your-project-folder"
-github_username = "your-github-username"
+project_folder  = "team-ml/recommendations"
+github_username = "alice"
 ```
 
-This file is gitignored. Each team member has their own copy with their own project folder.
+Edit this file any time to update your settings.
 
-## How Updates Work
+---
 
-Setup installs a cron job that runs daily at 9am:
+## Updates
+
+Zenith updates itself. Setup installs a background job that runs once a day at 9am:
+
 ```
 0 9 * * * cd ~/.zenith && git pull origin main --quiet
 ```
 
-Updates are automatic and silent. The symlink means your `/zenith` command always points to the latest version.
+Nothing to maintain. You always have the latest version.
+
+---
+
+## Troubleshooting
+
+**`/zenith` not recognized in Claude Code**
+The symlink from your repo to `~/.zenith` wasn't created. Re-run the setup script from the repo root.
+
+**"no .agent-config found" error**
+Setup didn't finish, or you opened Claude Code from the wrong folder. Make sure you open Claude Code from your repo root — the same folder where `.git/` lives.
+
+**Push rejected**
+Run `/zenith push failed`. Zenith will diagnose and fix the most common causes (branch behind remote, no upstream set, protected branch).
+
+---
 
 ## Contributing
 
-Open issues for bugs or feature requests. PRs welcome.
+Open an issue for bugs or feature requests. PRs welcome.
 
 ## License
 

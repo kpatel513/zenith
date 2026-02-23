@@ -53,32 +53,85 @@ warning: project_folder "{project_folder}" does not exist in this repo.
 ```
 Continue — do not stop, but surface the warning before every operation.
 
-## Step 1b: Post-Merge Auto-Sync
+## Step 1b: Behind-Main Detection and Auto-Sync
 
 **Run this immediately after diagnostics, before situation detection or intent classification.**
 
-This handles the case where a PR was merged on GitHub and the branch is now behind main due to the merge commit. Non-technical users won't know to ask for this — detect it automatically.
+Handles all cases where the branch is behind main. Non-technical users won't know to ask for any of these — detect and respond automatically.
 
 ```bash
 git fetch origin
 git rev-list --count HEAD..origin/{base_branch}
 gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state merged --limit 1
+gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state closed --limit 1
 ```
 
-If **behind > 0** AND **a merged PR exists for {current_branch}**:
+If **behind = 0**: skip this step entirely.
+
+If **behind > 0**, classify into one of three tiers:
+
+---
+
+**Tier 1 — Merged PR (your work landed, main moved forward)**
+
+Condition: merged PR exists for `{current_branch}`
 
 - Print: `"your PR was merged — syncing {current_branch} with {base_branch}."`
 - Execute:
   ```bash
   git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
-  git push origin {current_branch} --force-with-lease  # CMD_PUSH_SET_UPSTREAM
+  git push origin {current_branch} --force-with-lease
   ```
 - Print: `"synced. {current_branch} is up to date with {base_branch}."`
-- Continue to Step 2 with the updated repo state. Do not stop here.
+- Continue to Step 2. Do not stop here.
 
-If behind > 0 but **no merged PR found**: skip this step. The user may be working behind main normally — handle it in Step 2/Step 4 as S4.
+---
 
-If behind = 0: skip this step entirely.
+**Tier 2 — Rejected PR (your PR was closed without merging)**
+
+Condition: no merged PR, but a closed PR exists for `{current_branch}`
+
+- Print:
+  ```
+  your PR was closed without merging. main has moved on since then.
+  your changes are still on this branch — nothing was lost.
+  ```
+- Show incoming commits that touched `{project_folder}/`:
+  ```bash
+  git log HEAD..origin/{base_branch} --oneline --format="%h %s" -- {project_folder}
+  ```
+- Print:
+  ```
+  what: brings your branch up to date with {base_branch} so you can rework and re-submit.
+        your commits stay intact on top — nothing is deleted.
+  ```
+- Ask: `"Sync with {base_branch} now? [y/n]"`
+- If yes:
+  ```bash
+  git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
+  git push origin {current_branch} --force-with-lease
+  ```
+  Print: `"synced. ready to rework and push again."`
+- If no: Print `"ok — your branch is unchanged. run /zenith sync when ready."` Continue to Step 2.
+
+---
+
+**Tier 3 — Teammate pushed to main (no PR activity on this branch)**
+
+Condition: no merged PR, no closed PR for `{current_branch}`
+
+- Print:
+  ```
+  heads up: {base_branch} has {n} new commit(s) since your branch was last synced.
+  ```
+- Show commits that touched `{project_folder}/`:
+  ```bash
+  git log HEAD..origin/{base_branch} --oneline --format="%h %s" -- {project_folder}
+  ```
+  If none touched `{project_folder}`: print `"none of these touched your folder — safe to sync anytime."`
+  If some did: print `"some of these touched your folder — review before syncing."`
+- Do NOT ask to sync here. Surface the information and continue to Step 2.
+  The user can run `/zenith sync` explicitly when ready. Do not interrupt their current intent.
 
 ## Step 2: Situation Detection
 

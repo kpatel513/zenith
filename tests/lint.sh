@@ -56,7 +56,7 @@ SKIP_INTENTS=("INTENT_UNKNOWN" "INTENT_HELP")
 INTENT_LIST=()
 while IFS= read -r line; do
     INTENT_LIST+=("$line")
-done < <(grep -oE '\`INTENT_[A-Z_]+\`' "$ZENITH_MD" | grep -oE 'INTENT_[A-Z_]+' | sort -u)
+done < <(grep -oE 'INTENT_[A-Z_]+' "$ZENITH_MD" | sort -u)
 
 for intent in "${INTENT_LIST[@]}"; do
     # Skip intents that intentionally have no handler section

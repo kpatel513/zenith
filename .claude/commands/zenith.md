@@ -85,6 +85,7 @@ Map user's request to ONE intent. Use both request text AND situation to classif
 - `INTENT_PUSH` - push, push my work, create PR, open PR
 - `INTENT_FIX_PUSH` - push failed, rejected, push error, can't push
 - `INTENT_UPDATE_PR` - update PR, add changes to PR, push more changes
+- `INTENT_MERGE_COMPLETE` - merge complete, I merged it, PR was merged, done merging, merge the pr (when no open PR exists)
 - `INTENT_HELP` - help, what can you do, what commands exist
 - `INTENT_UNKNOWN` - cannot determine intent
 
@@ -105,6 +106,7 @@ sync with main            | Rebase your branch onto latest main
 push                      | Commit, sync, push, and show PR URL
 push failed               | Diagnose why push was rejected and fix it
 update my PR              | Add new commits to existing PR
+I merged the PR           | Sync branch with main after PR is merged
 undo last commit          | Soft reset - undo commit but keep changes
 throw away changes        | Hard reset - permanently discard everything
 what's staged             | Show what's in staging area
@@ -763,7 +765,46 @@ commits: {n} ahead of {base_branch}
 
 PR: https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1
 
-Next: "next: PR page opened in your browser — fill in the title and description"
+Next: "next: after you merge the PR on GitHub, come back and run /zenith sync — this pulls the merge commit onto your branch so you stay in sync with main"
+
+### INTENT_MERGE_COMPLETE
+
+This intent handles the post-merge cleanup. Trigger when user says: "merge complete", "I merged it", "PR was merged", "merge the pr" (when no open PR exists), "done merging", "just merged".
+
+Execute:
+```bash
+git fetch origin                   # CMD_FETCH_ORIGIN
+gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state merged --limit 1
+git rev-list --count HEAD..origin/{base_branch}  # CMD_COMMITS_BEHIND
+git rev-list --count origin/{base_branch}..HEAD
+```
+
+If merged PR found OR (0 ahead AND behind > 0):
+```
+detected: your PR was merged. {current_branch} is {n} behind main — pulling in the merge commit.
+```
+
+Execute:
+```bash
+git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
+git rev-list --count HEAD..origin/{base_branch}
+git rev-list --count origin/{base_branch}..HEAD
+```
+
+Print:
+```
+synced:  {current_branch}
+behind:  0
+ahead:   0
+your branch is clean and in sync with {base_branch}.
+```
+
+Next: "next: start new work with /zenith start new feature, or keep building on {current_branch}"
+
+If no merged PR found AND branch is not behind:
+```
+no merged PR found for {current_branch}. branch is already in sync.
+```
 
 ### INTENT_FIX_PUSH
 

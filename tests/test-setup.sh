@@ -93,7 +93,8 @@ test_idempotent() {
     echo "test: idempotent (second run)"
 
     local zenith_dir
-    zenith_dir=$(mktemp -d)  # pre-exists → simulates already installed
+    zenith_dir=$(mktemp -d)
+    touch "$zenith_dir/.setup-complete"  # marker → simulates already installed
 
     local output exit_code
     output=$(ZENITH_DIR="$zenith_dir" bash "$REPO_ROOT/scripts/setup.sh" 2>&1) || true
@@ -195,6 +196,39 @@ test_invalid_monorepo_path() {
 }
 
 # ---------------------------------------------------------------------------
+# Test: partial install (dir exists, no marker) — cleans up and completes
+# ---------------------------------------------------------------------------
+
+test_partial_install_recovery() {
+    echo
+    echo "test: partial install recovery"
+
+    local source_repo zenith_dir monorepo
+    source_repo=$(make_source_repo)
+    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
+    monorepo=$(mktemp -d); git init "$monorepo" --quiet
+
+    # Simulate a partial install: directory exists but no .setup-complete marker
+    mkdir -p "$zenith_dir"
+
+    local input
+    input="$monorepo
+my-project
+my-org
+my-repo
+main
+myuser"
+
+    run_setup "$zenith_dir" "$source_repo" "$input"
+
+    assert_file    "$monorepo/.agent-config"              "recovered: wrote .agent-config"
+    assert_symlink "$monorepo/.claude/commands/zenith.md" "recovered: created zenith.md symlink"
+    assert_file    "$zenith_dir/.setup-complete"          "recovered: wrote .setup-complete marker"
+
+    rm -rf "$source_repo" "$zenith_dir" "$monorepo"
+}
+
+# ---------------------------------------------------------------------------
 # Test: symlink points to correct target
 # ---------------------------------------------------------------------------
 
@@ -236,6 +270,7 @@ echo "=============="
 
 test_fresh_install
 test_idempotent
+test_partial_install_recovery
 test_gitignore_no_duplicates
 test_existing_gitignore_preserved
 test_invalid_monorepo_path

@@ -14,11 +14,17 @@ echo "Zenith Setup"
 echo "============"
 echo
 
-# Check if already installed
-if [ -d "$ZENITH_DIR" ]; then
+# Check if already installed (marker written at end of successful setup)
+if [ -f "$ZENITH_DIR/.setup-complete" ]; then
     echo "Zenith already installed at $ZENITH_DIR"
     echo "To update, run: cd $ZENITH_DIR && git pull"
     exit 0
+fi
+
+# Partial install (directory exists but setup never completed) — clean up and retry
+if [ -d "$ZENITH_DIR" ]; then
+    echo "Found incomplete installation at $ZENITH_DIR — cleaning up and retrying..."
+    rm -rf "$ZENITH_DIR"
 fi
 
 # Clone Zenith repository
@@ -107,6 +113,9 @@ CRON_CMD="0 9 * * * cd $ZENITH_DIR && git pull origin main --quiet"
     echo "$CRON_CMD"
 }
 echo "✓ Installed (runs daily at 9am)"
+
+# Mark installation as complete (used to detect partial installs on re-run)
+touch "$ZENITH_DIR/.setup-complete"
 
 echo
 echo "Installation Complete"

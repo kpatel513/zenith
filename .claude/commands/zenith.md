@@ -747,9 +747,9 @@ If no: Stop. "Cancelled. No changes made."
 
 Execute in order (stop on any failure):
 ```bash
+git commit -m "{message}"          # CMD_COMMIT_WITH_MESSAGE (only if uncommitted changes exist — must be before rebase)
 git fetch origin                   # CMD_FETCH_ORIGIN
 git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE (apply conflict resolution if needed)
-git commit -m "{message}"          # CMD_COMMIT_WITH_MESSAGE (only if uncommitted changes exist)
 git push -u origin {current_branch}  # CMD_PUSH_SET_UPSTREAM
 open "https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1"
 ```

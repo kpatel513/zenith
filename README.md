@@ -28,7 +28,7 @@ Meanwhile, if she had accidentally edited a file in the payments team's folder, 
 
 ## Who it's for
 
-Teams where multiple people share one repo, with each person owning a subfolder:
+**Shared monorepos** — multiple people in one repo, each owning a subfolder:
 
 ```
 company-repo/
@@ -41,6 +41,8 @@ company-repo/
 ```
 
 Zenith knows which folder is yours. It only commits your files, warns you if anything else changed, and blocks operations that could affect your teammates.
+
+**Solo or small-team repos** — you own the whole thing, but you still want safe branching, automatic syncing, and PR workflows without thinking about git commands.
 
 It's especially useful for people who are strong in their domain — ML, data, design — but don't spend their days thinking about git.
 
@@ -73,7 +75,7 @@ Run this from your terminal — anywhere, not inside the repo:
 curl -fsSL https://raw.githubusercontent.com/kpatel513/zenith/main/scripts/setup.sh | bash
 ```
 
-The script asks four questions.
+The script asks three questions.
 
 ---
 
@@ -95,15 +97,23 @@ It prints the exact path to paste in.
 
 **Question 2 — Which folder is yours?**
 
+**Shared monorepo** — enter the subfolder where your work lives, relative to the repo root:
+
 ```
 Your project folder: team-ml/recommendations
 ```
 
-The subfolder where your work lives, relative to the repo root. Zenith scopes commits, diffs, and safety checks to this folder.
-
 Examples: `team-alpha/backend`, `ml/training-pipeline`, `services/auth`
 
-If you work across the entire repo with no specific subfolder, enter `.`
+Zenith scopes commits, diffs, and safety checks to this folder and warns you if you accidentally touch anything outside it.
+
+**Solo or whole-repo** — press Enter or type `.`:
+
+```
+Your project folder: .
+```
+
+Zenith will still handle branching, syncing, and PRs — it just won't scope checks to a subfolder.
 
 ---
 

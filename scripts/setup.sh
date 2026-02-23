@@ -4,8 +4,8 @@ set -euo pipefail
 # Zenith Installation Script
 # Runs once per person. Idempotent - running twice changes nothing.
 
-ZENITH_DIR="$HOME/.zenith"
-ZENITH_REPO="https://github.com/your-org/zenith.git"
+ZENITH_DIR="${ZENITH_DIR:-$HOME/.zenith}"
+ZENITH_REPO="${ZENITH_REPO:-https://github.com/your-org/zenith.git}"
 
 echo "Zenith Setup"
 echo "============"

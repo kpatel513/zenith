@@ -39,6 +39,32 @@ Parse `.agent-config` for:
 
 If `.agent-config` not found: Stop. Error: "no .agent-config found. run setup.sh first."
 
+## Step 1b: Post-Merge Auto-Sync
+
+**Run this immediately after diagnostics, before situation detection or intent classification.**
+
+This handles the case where a PR was merged on GitHub and the branch is now behind main due to the merge commit. Non-technical users won't know to ask for this — detect it automatically.
+
+```bash
+git fetch origin
+git rev-list --count HEAD..origin/{base_branch}
+gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state merged --limit 1
+```
+
+If **behind > 0** AND **a merged PR exists for {current_branch}**:
+
+- Print: `"your PR was merged — syncing {current_branch} with {base_branch}."`
+- Execute:
+  ```bash
+  git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
+  ```
+- Print: `"synced. {current_branch} is up to date with {base_branch}."`
+- Continue to Step 2 with the updated repo state. Do not stop here.
+
+If behind > 0 but **no merged PR found**: skip this step. The user may be working behind main normally — handle it in Step 2/Step 4 as S4.
+
+If behind = 0: skip this step entirely.
+
 ## Step 2: Situation Detection
 
 From diagnostic output, classify into one situation:
@@ -765,7 +791,7 @@ commits: {n} ahead of {base_branch}
 
 PR: https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1
 
-Next: "next: after you merge the PR on GitHub, come back and run /zenith sync — this pulls the merge commit onto your branch so you stay in sync with main"
+Next: "next: PR page opened in your browser — fill in the title and description, then merge. When you come back, Zenith will automatically sync your branch."
 
 ### INTENT_MERGE_COMPLETE
 

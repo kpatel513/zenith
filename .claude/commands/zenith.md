@@ -57,6 +57,7 @@ If **behind > 0** AND **a merged PR exists for {current_branch}**:
 - Execute:
   ```bash
   git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
+  git push origin {current_branch} --force-with-lease  # CMD_PUSH_SET_UPSTREAM
   ```
 - Print: `"synced. {current_branch} is up to date with {base_branch}."`
 - Continue to Step 2 with the updated repo state. Do not stop here.

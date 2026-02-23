@@ -39,6 +39,20 @@ Parse `.agent-config` for:
 
 If `.agent-config` not found: Stop. Error: "no .agent-config found. run setup.sh first."
 
+**Validate config after parsing:**
+
+```bash
+[ -d "{project_folder}" ] || echo "FOLDER_MISSING"
+```
+
+If `project_folder` is not `.` and the folder does not exist on disk:
+```
+warning: project_folder "{project_folder}" does not exist in this repo.
+         scope checks and contamination detection will not work correctly.
+         fix: edit .agent-config and set project_folder to your actual folder, or run setup.sh again.
+```
+Continue — do not stop, but surface the warning before every operation.
+
 ## Step 1b: Post-Merge Auto-Sync
 
 **Run this immediately after diagnostics, before situation detection or intent classification.**
@@ -113,6 +127,12 @@ Map user's request to ONE intent. Use both request text AND situation to classif
 - `INTENT_FIX_PUSH` - push failed, rejected, push error, can't push
 - `INTENT_UPDATE_PR` - update PR, add changes to PR, push more changes
 - `INTENT_MERGE_COMPLETE` - merge complete, I merged it, PR was merged, done merging, merge the pr (when no open PR exists)
+- `INTENT_STATUS` - status, where am I, what's my situation, what's going on
+- `INTENT_DRAFT_PR` - draft PR, open draft, push as draft, WIP PR
+- `INTENT_FIX_CI` - CI failed, tests failing, build broke, CI is red, check CI
+- `INTENT_CLEANUP_BRANCHES` - clean up branches, delete old branches, remove merged branches
+- `INTENT_UNSTASH` - unstash, restore my stash, get my changes back
+- `INTENT_FIX_CONFLICT` - PR has conflicts, merge conflict on GitHub, can't merge PR
 - `INTENT_HELP` - help, what can you do, what commands exist
 - `INTENT_UNKNOWN` - cannot determine intent
 
@@ -141,6 +161,12 @@ forgot a file             | Add file to last commit (amend)
 split commits             | Separate changes into multiple commits
 how behind am I           | Show commits on main you don't have
 what changed today        | Show what teammates pushed to main
+status                    | Show branch, PR, and changes summary in one view
+draft PR                  | Push branch as draft PR (starts CI, no review yet)
+CI failed                 | Show which CI step failed and link to logs
+clean up branches         | Delete your old merged branches
+unstash                   | Restore changes saved by a previous stash
+PR has conflicts          | Resolve merge conflict blocking your PR
 help                      | Show this table
 ```
 
@@ -204,7 +230,22 @@ Next: "next: your branch is ready, start coding in {project_folder}/"
 
 ### INTENT_PICKUP_BRANCH
 
-Check situation. If S5 or S6: Stop. "You have uncommitted changes. Save or discard them first."
+Check situation.
+
+If S5 or S6 (uncommitted or staged changes):
+```
+you have uncommitted changes on {current_branch}.
+
+what: saves your in-progress work to a temporary stash so you can switch branches.
+      your changes will be waiting when you come back to {current_branch}.
+```
+Ask: "Stash changes and switch? [y/n]"
+
+If yes:
+```bash
+git stash push -m "zenith: auto-stash before switching to {branch}"
+```
+If no: Stop. "Cancelled. Save or discard your changes first."
 
 Execute:
 ```bash
@@ -230,6 +271,8 @@ recent:
   {hash} {message} — {author} {time}
 ```
 
+If stash was created: "note: your changes on {previous_branch} are stashed — run /zenith unstash when you return to that branch"
+
 Next: "next: start working in {project_folder}/"
 
 ### INTENT_CONTINUE
@@ -240,6 +283,23 @@ git branch --sort=-committerdate --format="%(refname:short) %(committerdate:rela
 ```
 
 Show numbered list. Ask: "Which branch?"
+
+Check situation.
+
+If S5 or S6 (uncommitted or staged changes):
+```
+you have uncommitted changes on {current_branch}.
+
+what: saves your in-progress work to a temporary stash so you can switch branches.
+      your changes will be waiting when you come back to {current_branch}.
+```
+Ask: "Stash changes and switch? [y/n]"
+
+If yes:
+```bash
+git stash push -m "zenith: auto-stash before switching to {selected}"
+```
+If no: Stop. "Cancelled. Save or discard your changes first."
 
 Execute:
 ```bash
@@ -265,6 +325,8 @@ what: replays your commits on top of these new ones — your branch moves forwar
 Ask: "Sync with {base_branch} now? [y/n]"
 
 If yes: Execute INTENT_SYNC operation.
+
+If stash was created: "note: your changes on {previous_branch} are stashed — run /zenith unstash when you return"
 
 Next: "next: start working, or sync with main first"
 
@@ -549,6 +611,22 @@ If no incoming commits: "up to date with {base_branch}" - stop.
 
 Print incoming commits.
 
+**Stale branch warning** — if behind > 20 commits:
+
+```bash
+git log HEAD..origin/{base_branch} --oneline --format="%h %s" -- {project_folder}
+```
+
+Print:
+```
+heads up: you are {n} commits behind {base_branch}. this sync may take time.
+commits that touched your folder ({project_folder}/):
+  {hash} {message}
+  ...
+```
+
+If none of the incoming commits touched `{project_folder}`: "none of the {n} incoming commits touched your folder — sync should be conflict-free."
+
 **Determine sync strategy based on PR state:**
 
 If an **open PR exists** for {current_branch}:
@@ -818,17 +896,34 @@ Apply conflict resolution if needed (see INTENT_SYNC conflict rules above).
 
 ```bash
 git push -u origin {current_branch}  # CMD_PUSH_SET_UPSTREAM
-open "https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1"
 ```
 
+Ask: "Open as draft PR or ready for review? [d/r]"
+
+If draft:
+```bash
+gh pr create --draft --base {base_branch} --head {current_branch} --title "{last_commit_message}" --body ""
+```
+Print:
+```
+branch:  {current_branch}
+base:    {base_branch}
+commits: {n} ahead of {base_branch}
+draft PR opened — CI will run, reviewers not notified yet.
+```
+Next: "next: when ready for review, run /zenith push — Zenith will mark it ready"
+
+If ready for review:
+```bash
+open "https://github.com/{github_org}/{github_repo}/compare/{base_branch}...{current_branch}?expand=1"
+```
 Print:
 ```
 branch:  {current_branch}
 base:    {base_branch}
 commits: {n} ahead of {base_branch}
 ```
-
-PR: https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1
+PR: https://github.com/{github_org}/{github_repo}/compare/{base_branch}...{current_branch}?expand=1
 
 Next: "next: PR page opened in your browser — fill in the title and description, then merge. When you come back, Zenith will automatically sync your branch."
 
@@ -958,6 +1053,230 @@ PR:      https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch
 ```
 
 Next: "next: PR page opened in your browser"
+
+### INTENT_STATUS
+
+Execute:
+```bash
+git fetch origin                   # CMD_FETCH_ORIGIN
+git branch --show-current          # CMD_CURRENT_BRANCH
+git status --short                 # CMD_STATUS_SHORT
+git rev-list --count HEAD..origin/{base_branch}  # CMD_COMMITS_BEHIND
+git rev-list --count origin/{base_branch}..HEAD
+git diff --stat HEAD
+gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open --limit 1
+git stash list                     # CMD_STASH_LIST
+```
+
+Print:
+```
+branch:    {current_branch}
+behind:    {n} commits behind {base_branch}
+ahead:     {n} commits ahead of {base_branch}
+changes:   {n} uncommitted files
+staged:    {n} files staged
+stashes:   {n} stashed entries
+pr:        {pr_title} #{pr_number} ({pr_status}) — or "no open PR"
+```
+
+If behind > 0: "run /zenith sync to catch up"
+If uncommitted changes: "run /zenith save to commit, or /zenith what did I change to review"
+If open PR: "run /zenith CI failed to check CI status"
+If everything clean and ahead > 0: "run /zenith push to open a PR"
+If everything clean and ahead = 0: "nothing to do — branch is in sync"
+
+Next: one-line guidance based on the dominant issue found
+
+### INTENT_DRAFT_PR
+
+Same as INTENT_PUSH but always opens as draft. Skips the [d/r] question.
+
+Execute the full INTENT_PUSH flow (commit if needed, sync, push), then:
+```bash
+gh pr create --draft --base {base_branch} --head {current_branch} --title "{last_commit_message}" --body ""
+```
+
+Print:
+```
+draft PR opened
+branch:  {current_branch}
+CI:      running — reviewers not notified
+```
+
+Next: "next: when ready for review, say /zenith push — Zenith will mark the PR ready"
+
+### INTENT_FIX_CI
+
+Execute:
+```bash
+git branch --show-current          # CMD_CURRENT_BRANCH
+gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open --limit 1
+gh run list --repo {github_org}/{github_repo} --branch {current_branch} --limit 5
+```
+
+If no open PR: "no open PR found for {current_branch}. CI only runs on PRs — push first with /zenith push."
+
+Show last 5 CI runs with status. Find the most recent failed run.
+
+```bash
+gh run view {run_id} --repo {github_org}/{github_repo} --log-failed
+```
+
+Print:
+```
+CI run:   {run_name} #{run_id}
+status:   failed
+failed step: {step_name}
+
+failure output:
+  {log_lines}
+
+PR: https://github.com/{github_org}/{github_repo}/pull/{pr_number}
+```
+
+If all runs passing: "CI is green on {current_branch} — all checks passed."
+
+Next: "next: fix the failure, then run /zenith push to add a new commit and re-trigger CI"
+
+### INTENT_CLEANUP_BRANCHES
+
+Execute:
+```bash
+git fetch --prune origin           # CMD_FETCH_ORIGIN
+git branch --merged origin/{base_branch} --format="%(refname:short) %(committerdate:relative)"
+```
+
+Filter to branches authored by {github_username}:
+```bash
+git branch --merged origin/{base_branch} --format="%(refname:short)" | while read b; do
+  git log -1 --format="%ae" "$b"
+done
+```
+
+Show only branches where author email matches the user. Exclude `{base_branch}`.
+
+Print numbered list:
+```
+your merged branches (safe to delete):
+  1. feature/old-thing    last commit 3 weeks ago
+  2. feature/done-work    last commit 2 months ago
+```
+
+If none: "no merged branches to clean up."
+
+```
+what: deletes these branches from your machine and from GitHub.
+      they are already merged — no work will be lost.
+```
+
+Ask: "Delete all of these? [y/n] (or enter numbers to pick specific ones)"
+
+Execute for each selected:
+```bash
+git branch -d {branch}
+git push origin --delete {branch}
+```
+
+Print:
+```
+deleted: feature/old-thing (local + remote)
+deleted: feature/done-work (local + remote)
+```
+
+Next: "next: your branch list is clean"
+
+### INTENT_UNSTASH
+
+Execute:
+```bash
+git stash list                     # CMD_STASH_LIST
+```
+
+If no stashes: "no stashed changes found."
+
+Show numbered list of stashes. If only one stash, use it automatically.
+
+```
+what: restores your stashed changes back into your working tree.
+      the stash entry is removed once restored.
+```
+
+Ask: "Restore stash? [y/n]" (or "Which stash?" if multiple)
+
+Execute:
+```bash
+git stash pop stash@{n}
+git status --short                 # CMD_STATUS_SHORT
+```
+
+Print:
+```
+restored: {stash_message}
+files back in your working tree:
+  {file}
+  {file}
+```
+
+Next: "next: run /zenith save to commit these changes"
+
+### INTENT_FIX_CONFLICT
+
+Execute:
+```bash
+git fetch origin                   # CMD_FETCH_ORIGIN
+git branch --show-current          # CMD_CURRENT_BRANCH
+gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open --limit 1
+git log --merges --oneline -1 origin/{base_branch}
+```
+
+If no open PR: "no open PR for {current_branch}. conflicts only appear on open PRs."
+
+Print:
+```
+your PR is blocked by a merge conflict with {base_branch}.
+the conflicting files need to be resolved locally, then pushed.
+```
+
+Check situation. If S5: Stop. "Save or discard your uncommitted changes before resolving conflicts."
+
+```
+what: merges the latest {base_branch} into your branch locally so you can resolve conflicts,
+      then pushes the resolution. your PR unblocks automatically.
+```
+
+Ask: "Resolve conflicts now? [y/n]"
+
+If yes:
+```bash
+git merge origin/{base_branch}
+```
+
+If conflicts:
+
+For each conflicted file:
+```bash
+git diff --name-only --diff-filter=U
+```
+
+Apply three-tier resolution (see tools/conflict-resolver.md):
+- Tier 1 (file outside {project_folder}): stop, do not resolve. Contact file owner.
+- Tier 2 (mechanical): auto-resolve, `git add {file}`, continue
+- Tier 3 (substantive): show both versions, ask [y/i/e], `git add {file}`
+
+After all conflicts resolved:
+```bash
+git commit
+git push origin {current_branch}   # CMD_PUSH_SIMPLE
+```
+
+Print:
+```
+conflict resolved: {file}
+pushed: {hash}
+PR is unblocked — GitHub will update automatically.
+```
+
+Next: "next: check your PR on GitHub — CI will re-run on the new commit"
 
 ## Step 5: After Every Operation
 

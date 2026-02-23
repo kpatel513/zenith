@@ -541,12 +541,23 @@ Execute:
 ```bash
 git fetch origin                   # CMD_FETCH_ORIGIN
 git log HEAD..origin/{base_branch} --oneline --format="%h %s — %an %ar"
+gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open --limit 1
 ```
 
-If no output: "up to date with {base_branch}" - stop.
+If no incoming commits: "up to date with {base_branch}" - stop.
 
 Print incoming commits.
 
+**Determine sync strategy based on PR state:**
+
+If an **open PR exists** for {current_branch}:
+```
+what: merges the latest {base_branch} into your branch.
+      uses merge (not rebase) because reviewers have already seen your commits —
+      rewriting history would invalidate their review comments.
+```
+
+If **no open PR** (pre-review, history can be rewritten safely):
 ```
 what: replays your commits on top of these {n} new ones from {base_branch}.
       your branch moves forward cleanly — no merge commit is created.
@@ -556,12 +567,24 @@ Ask: "Sync now? [y/n]"
 
 If no: Stop. "Cancelled. Your branch is unchanged."
 
-Execute:
+**If open PR exists — execute merge:**
+```bash
+git merge origin/{base_branch}
+```
+
+If conflicts: apply three-tier resolution (see tools/conflict-resolver.md), replacing abort/continue with:
+- To cancel: `git merge --abort`
+- After resolving and staging: `git commit` (no `--continue` needed for merge)
+- Tier 1 (file outside {project_folder}): stop, do not resolve. `git merge --abort` to cancel.
+- Tier 2 (mechanical): `git checkout --theirs {file}`, `git add {file}`, `git commit`
+- Tier 3 (substantive): show both versions, ask [y/i/e], `git add {file}`, `git commit`
+
+**If no open PR — execute rebase:**
 ```bash
 git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
 ```
 
-**If conflicts occur**, apply three-tier resolution (see tools/conflict-resolver.md):
+If conflicts: apply three-tier resolution (see tools/conflict-resolver.md):
 
 **Tier 1**: File outside {project_folder}:
 ```
@@ -775,9 +798,24 @@ If no: Stop. "Cancelled. No changes made."
 
 Execute in order (stop on any failure):
 ```bash
-git commit -m "{message}"          # CMD_COMMIT_WITH_MESSAGE (only if uncommitted changes exist — must be before rebase)
+git commit -m "{message}"          # CMD_COMMIT_WITH_MESSAGE (only if uncommitted changes exist — must be before sync)
 git fetch origin                   # CMD_FETCH_ORIGIN
-git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE (apply conflict resolution if needed)
+gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open --limit 1
+```
+
+**If an open PR exists** — sync with merge to preserve review comments:
+```bash
+git merge origin/{base_branch}     # preserves commit history, no force push needed
+```
+
+**If no open PR** — sync with rebase for clean history:
+```bash
+git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
+```
+
+Apply conflict resolution if needed (see INTENT_SYNC conflict rules above).
+
+```bash
 git push -u origin {current_branch}  # CMD_PUSH_SET_UPSTREAM
 open "https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1"
 ```

@@ -6,6 +6,9 @@ set -euo pipefail
 
 ZENITH_DIR="${ZENITH_DIR:-$HOME/.zenith}"
 ZENITH_REPO="${ZENITH_REPO:-https://github.com/kpatel513/zenith.git}"
+# When piped (curl | bash), stdin is the pipe — read prompts from the terminal instead.
+# Tests override this to /dev/stdin to inject input via heredoc.
+TTY="${TTY:-/dev/tty}"
 
 echo "Zenith Setup"
 echo "============"
@@ -32,18 +35,18 @@ echo "Configuration"
 echo "-------------"
 echo
 
-read -rp "Monorepo absolute path: " MONOREPO_PATH
+read -rp "Repo absolute path: " MONOREPO_PATH <"$TTY"
 if [ ! -d "$MONOREPO_PATH" ]; then
     echo "Error: Directory $MONOREPO_PATH does not exist"
     exit 1
 fi
 
-read -rp "Your project folder name: " PROJECT_FOLDER
-read -rp "GitHub organization: " GITHUB_ORG
-read -rp "GitHub repository: " GITHUB_REPO
-read -rp "Base branch [main]: " BASE_BRANCH
+read -rp "Your project folder (or . for whole repo): " PROJECT_FOLDER <"$TTY"
+read -rp "GitHub organization: " GITHUB_ORG <"$TTY"
+read -rp "GitHub repository: " GITHUB_REPO <"$TTY"
+read -rp "Base branch [main]: " BASE_BRANCH <"$TTY"
 BASE_BRANCH="${BASE_BRANCH:-main}"
-read -rp "GitHub username: " GITHUB_USERNAME
+read -rp "GitHub username: " GITHUB_USERNAME <"$TTY"
 
 echo
 
@@ -110,7 +113,7 @@ echo "Installation Complete"
 echo "====================="
 echo
 echo "Location:     $ZENITH_DIR"
-echo "Monorepo:     $MONOREPO_PATH"
+echo "Repo:         $MONOREPO_PATH"
 echo "Project:      $PROJECT_FOLDER"
 echo "Base branch:  $BASE_BRANCH"
 echo "Command:      /zenith <anything>"

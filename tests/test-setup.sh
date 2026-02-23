@@ -43,7 +43,8 @@ run_setup() {
     # $1 = ZENITH_DIR override
     # $2 = ZENITH_REPO override
     # $3 = stdin (heredoc)
-    ZENITH_DIR="$1" ZENITH_REPO="$2" bash "$REPO_ROOT/scripts/setup.sh" \
+    # TTY=/dev/stdin lets tests inject input via heredoc instead of /dev/tty
+    ZENITH_DIR="$1" ZENITH_REPO="$2" TTY=/dev/stdin bash "$REPO_ROOT/scripts/setup.sh" \
         <<< "$3" 2>/dev/null
 }
 

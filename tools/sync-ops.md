@@ -2,6 +2,8 @@
 
 Precise git command sequences for synchronizing branches with base branch.
 
+**See tools/common-commands.md for shared command patterns (CMD_*).**
+
 ## Full Sync (Rebase onto Base Branch)
 
 Used in: INTENT_SYNC

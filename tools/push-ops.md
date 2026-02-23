@@ -2,6 +2,8 @@
 
 Precise git command sequences for pushing changes and creating pull requests.
 
+**See tools/common-commands.md for shared command patterns (CMD_*).**
+
 ## Full Push Workflow (Commit + Push + PR)
 
 Used in: INTENT_PUSH
@@ -25,24 +27,24 @@ CURRENT=$(git branch --show-current)
 # If files outside project_folder: ask include/exclude
 
 # 4. Fetch latest
-git fetch origin
+git fetch origin                   # CMD_FETCH_ORIGIN
 
 # 5. Sync with base branch (rebase)
-git rebase origin/{base_branch}
+git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
 
 # Handle conflicts if any (see conflict-resolver.md)
 
 # 6. Stage files
-git add {project_folder}/  # or all files if user chose include
+git add {project_folder}/          # CMD_STAGE_FILE (or all files if user chose include)
 
 # 7. Show what will be committed
-git diff --cached --stat
+git diff --cached --stat           # CMD_DIFF_CACHED_STAT
 
 # 8. Commit
-git commit -m "{message}"
+git commit -m "{message}"          # CMD_COMMIT_WITH_MESSAGE
 
 # 9. Push with upstream tracking
-git push -u origin {current_branch}
+git push -u origin {current_branch}  # CMD_PUSH_SET_UPSTREAM
 
 # 10. Show PR URL
 echo "PR: https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1"
@@ -61,11 +63,11 @@ if [ "$CURRENT" = "{base_branch}" ]; then
 fi
 
 # 2. Fetch and sync
-git fetch origin
-git rebase origin/{base_branch}
+git fetch origin                   # CMD_FETCH_ORIGIN
+git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
 
 # 3. Push
-git push -u origin {current_branch}
+git push -u origin {current_branch}  # CMD_PUSH_SET_UPSTREAM
 
 # 4. Show PR URL
 ```
@@ -83,12 +85,12 @@ if [ "$CURRENT" = "{base_branch}" ]; then
 fi
 
 # 2. Stage and commit new changes
-git add {project_folder}/
-git diff --cached --stat
-git commit -m "{message}"
+git add {project_folder}/          # CMD_STAGE_FILE
+git diff --cached --stat           # CMD_DIFF_CACHED_STAT
+git commit -m "{message}"          # CMD_COMMIT_WITH_MESSAGE
 
 # 3. Push to same branch (updates PR automatically)
-git push origin {current_branch}
+git push origin {current_branch}   # CMD_PUSH_SIMPLE
 
 # 4. Show PR URL
 echo "Updated PR: https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}"
@@ -279,11 +281,11 @@ After PR is merged:
 
 ```bash
 # Delete remote branch
-git push origin --delete {branch_name}
+git push origin --delete {branch}
 
 # Delete local branch
 git checkout {base_branch}
-git branch -d {branch_name}
+git branch -d {branch}
 
 # Pull latest base branch
 git pull origin {base_branch}

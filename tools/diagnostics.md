@@ -2,6 +2,8 @@
 
 Zenith runs this exact diagnostic sequence on every invocation before interpreting the user's request. This is non-negotiable.
 
+**See tools/common-commands.md for shared command patterns (CMD_*).**
+
 ## Command Sequence
 
 Execute these commands in order and store all results:

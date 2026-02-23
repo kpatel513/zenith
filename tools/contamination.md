@@ -2,6 +2,8 @@
 
 The contamination check detects changes outside the user's designated project folder and identifies risky file patterns. It runs automatically during certain operations and can be invoked explicitly with `INTENT_CHECK_SCOPE`.
 
+**See tools/common-commands.md for shared command patterns (CMD_*).**
+
 ## When to Run
 
 Automatically run silently during:

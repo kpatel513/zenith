@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Zenith Installation Script
+# Runs once per person. Idempotent - running twice changes nothing.
+
+ZENITH_DIR="$HOME/.zenith"
+ZENITH_REPO="https://github.com/your-org/zenith.git"
+
+echo "Zenith Setup"
+echo "============"
+echo
+
+# Check if already installed
+if [ -d "$ZENITH_DIR" ]; then
+    echo "Zenith already installed at $ZENITH_DIR"
+    echo "To update, run: cd $ZENITH_DIR && git pull"
+    exit 0
+fi
+
+# Clone Zenith repository
+echo "Cloning Zenith to $ZENITH_DIR..."
+git clone "$ZENITH_REPO" "$ZENITH_DIR" 2>/dev/null || {
+    echo "Error: Failed to clone Zenith repository"
+    exit 1
+}
+echo "✓ Cloned successfully"
+echo
+
+# Collect configuration
+echo "Configuration"
+echo "-------------"
+echo
+
+read -rp "Monorepo absolute path: " MONOREPO_PATH
+if [ ! -d "$MONOREPO_PATH" ]; then
+    echo "Error: Directory $MONOREPO_PATH does not exist"
+    exit 1
+fi
+
+read -rp "Your project folder name: " PROJECT_FOLDER
+read -rp "GitHub organization: " GITHUB_ORG
+read -rp "GitHub repository: " GITHUB_REPO
+read -rp "Base branch [main]: " BASE_BRANCH
+BASE_BRANCH="${BASE_BRANCH:-main}"
+read -rp "GitHub username: " GITHUB_USERNAME
+
+echo
+
+# Create .claude/commands directory if it doesn't exist
+CLAUDE_COMMANDS_DIR="$MONOREPO_PATH/.claude/commands"
+if [ ! -d "$CLAUDE_COMMANDS_DIR" ]; then
+    echo "Creating $CLAUDE_COMMANDS_DIR..."
+    mkdir -p "$CLAUDE_COMMANDS_DIR"
+    echo "✓ Created"
+fi
+
+# Symlink zenith.md
+SYMLINK_TARGET="$CLAUDE_COMMANDS_DIR/zenith.md"
+if [ -L "$SYMLINK_TARGET" ] || [ -f "$SYMLINK_TARGET" ]; then
+    echo "Removing existing zenith.md..."
+    rm -f "$SYMLINK_TARGET"
+fi
+echo "Creating symlink to zenith.md..."
+ln -s "$ZENITH_DIR/.claude/commands/zenith.md" "$SYMLINK_TARGET"
+echo "✓ Symlinked"
+
+# Write .agent-config
+CONFIG_FILE="$MONOREPO_PATH/.agent-config"
+echo "Writing .agent-config..."
+cat > "$CONFIG_FILE" <<EOF
+[repo]
+github_org = "$GITHUB_ORG"
+github_repo = "$GITHUB_REPO"
+base_branch = "$BASE_BRANCH"
+
+[user]
+project_folder = "$PROJECT_FOLDER"
+github_username = "$GITHUB_USERNAME"
+EOF
+echo "✓ Written to $CONFIG_FILE"
+
+# Add .agent-config to .gitignore if not already present
+GITIGNORE_FILE="$MONOREPO_PATH/.gitignore"
+if [ -f "$GITIGNORE_FILE" ]; then
+    if ! grep -q "^\.agent-config$" "$GITIGNORE_FILE"; then
+        echo "Adding .agent-config to .gitignore..."
+        echo ".agent-config" >> "$GITIGNORE_FILE"
+        echo "✓ Added"
+    else
+        echo ".agent-config already in .gitignore"
+    fi
+else
+    echo "Creating .gitignore with .agent-config..."
+    echo ".agent-config" > "$GITIGNORE_FILE"
+    echo "✓ Created"
+fi
+
+# Install cron job for automatic updates
+echo "Installing automatic update cron job..."
+CRON_CMD="0 9 * * * cd $ZENITH_DIR && git pull origin main --quiet"
+(crontab -l 2>/dev/null | grep -v "zenith"; echo "$CRON_CMD") | crontab - 2>/dev/null || {
+    echo "Warning: Could not install cron job. You can add it manually:"
+    echo "$CRON_CMD"
+}
+echo "✓ Installed (runs daily at 9am)"
+
+echo
+echo "Installation Complete"
+echo "====================="
+echo
+echo "Location:     $ZENITH_DIR"
+echo "Monorepo:     $MONOREPO_PATH"
+echo "Project:      $PROJECT_FOLDER"
+echo "Base branch:  $BASE_BRANCH"
+echo "Command:      /zenith <anything>"
+echo
+echo "Try: /zenith help"
+echo

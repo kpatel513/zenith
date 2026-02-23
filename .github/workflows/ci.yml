@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run lint
+        run: bash tests/lint.sh
+
+  test-setup:
+    name: Setup script tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@test.com"
+          git config --global user.name "CI"
+      - name: Run setup tests
+        run: bash tests/test-setup.sh

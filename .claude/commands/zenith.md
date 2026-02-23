@@ -124,6 +124,22 @@ Check situation. If S5 or S6: Stop. "You have uncommitted changes. Save or disca
 Execute:
 ```bash
 git fetch origin                   # CMD_FETCH_ORIGIN
+git rev-list --count {base_branch}..origin/{base_branch}
+```
+
+If count > 0:
+```
+heads up: your local {base_branch} is {n} commits behind GitHub.
+          pulling latest before creating your branch so you start from current code.
+```
+
+If count = 0:
+```
+{base_branch} is up to date.
+```
+
+Execute:
+```bash
 git checkout {base_branch}
 git pull origin {base_branch}
 ```

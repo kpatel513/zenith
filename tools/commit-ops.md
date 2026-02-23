@@ -2,22 +2,24 @@
 
 Precise git command sequences for all commit-related operations.
 
+**See tools/common-commands.md for shared command patterns (CMD_*).**
+
 ## Standard Commit (Scoped to Project Folder)
 
 Used in: INTENT_SAVE
 
 ```bash
 # 1. Stage files in project folder only
-git add {project_folder}/
+git add {project_folder}/         # CMD_STAGE_FILE
 
 # 2. Show what will be committed
-git diff --cached --stat
+git diff --cached --stat           # CMD_DIFF_CACHED_STAT
 
 # 3. Commit with message
-git commit -m "{message}"
+git commit -m "{message}"          # CMD_COMMIT_WITH_MESSAGE
 
 # 4. Show commit info
-git log --oneline -1
+git log --oneline -1               # CMD_LAST_COMMIT_ONELINE
 git show --stat HEAD
 ```
 
@@ -27,16 +29,16 @@ Used when user explicitly chooses to include files outside project folder:
 
 ```bash
 # 1. Stage all changed files
-git add .
+git add .                          # CMD_STAGE_ALL
 
 # 2. Show what will be committed
-git diff --cached --stat
+git diff --cached --stat           # CMD_DIFF_CACHED_STAT
 
 # 3. Commit with message
-git commit -m "{message}"
+git commit -m "{message}"          # CMD_COMMIT_WITH_MESSAGE
 
 # 4. Show commit info
-git log --oneline -1
+git log --oneline -1               # CMD_LAST_COMMIT_ONELINE
 git show --stat HEAD
 ```
 
@@ -121,13 +123,13 @@ Used in: INTENT_SPLIT
 git status --short
 
 # 2. Stage files for first commit (user selects)
-git add {file1} {file2}
+git add {file1} {file2}            # CMD_STAGE_FILE
 
 # 3. Show what's staged
-git diff --cached --stat
+git diff --cached --stat           # CMD_DIFF_CACHED_STAT
 
 # 4. Commit first set
-git commit -m "{message1}"
+git commit -m "{message1}"         # CMD_COMMIT_WITH_MESSAGE
 
 # 5. Show remaining files
 git status --short

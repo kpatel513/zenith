@@ -2,6 +2,8 @@
 
 Three-tier conflict resolution system with non-negotiable rules for handling merge/rebase conflicts.
 
+**See tools/common-commands.md for shared command patterns (CMD_*).**
+
 ## When Conflicts Occur
 
 Conflicts occur during:

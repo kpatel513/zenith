@@ -2,6 +2,8 @@
 
 Complete list of safety rules Zenith never violates. These are non-negotiable guardrails.
 
+**See tools/common-commands.md for shared command patterns (CMD_*).**
+
 ## Rule 1: Never Push to Base Branch Directly
 
 **Enforcement**:

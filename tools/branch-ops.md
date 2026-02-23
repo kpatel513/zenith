@@ -2,6 +2,8 @@
 
 Precise git command sequences for all branch operations.
 
+**See tools/common-commands.md for shared command patterns (CMD_*).**
+
 ## Create New Branch from Base Branch
 
 Used in: INTENT_START_NEW
@@ -17,10 +19,10 @@ git checkout {base_branch}
 git pull origin {base_branch}
 
 # 4. Create and switch to new branch
-git checkout -b {branch_name}
+git checkout -b {branch}
 
 # 5. Push and set upstream
-git push -u origin {branch_name}
+git push -u origin {branch}
 ```
 
 **Branch Name Sanitization**:
@@ -49,13 +51,13 @@ grep -v "^{base_branch} "
 head -10
 
 # 4. After user selects, checkout
-git checkout {selected_branch}
+git checkout {branch}
 
 # 5. Fetch to compare with remote
 git fetch origin
 
 # 6. Show what's new on base branch since last work
-git log {selected_branch}..origin/{base_branch} --oneline
+git log {branch}..origin/{base_branch} --oneline
 ```
 
 ## Track Remote Branch
@@ -73,7 +75,7 @@ grep -v "HEAD" | grep -v "origin/{base_branch}"
 git fetch origin
 
 # 4. Create local branch tracking remote
-git checkout -b {branch_name} origin/{branch_name}
+git checkout -b {branch} origin/{branch}
 
 # 5. Show recent commits
 git log --oneline -3
@@ -81,8 +83,8 @@ git log --oneline -3
 
 Alternative if local branch already exists:
 ```bash
-git checkout {branch_name}
-git branch --set-upstream-to=origin/{branch_name}
+git checkout {branch}
+git branch --set-upstream-to=origin/{branch}
 git pull
 ```
 
@@ -136,19 +138,19 @@ git rev-list --count HEAD..origin/{base_branch}
 
 **Delete local branch** (safe):
 ```bash
-git branch -d {branch_name}
+git branch -d {branch}
 ```
 Fails if branch has unmerged changes.
 
 **Delete local branch** (force):
 ```bash
-git branch -D {branch_name}
+git branch -D {branch}
 ```
 Always succeeds.
 
 **Delete remote branch**:
 ```bash
-git push origin --delete {branch_name}
+git push origin --delete {branch}
 ```
 
 ## Rename Branch

@@ -2,6 +2,8 @@
 
 Precise git command sequences for undoing changes safely.
 
+**See tools/common-commands.md for shared command patterns (CMD_*).**
+
 ## Undo Last Commit (Keep Changes)
 
 Used in: INTENT_UNDO_COMMIT

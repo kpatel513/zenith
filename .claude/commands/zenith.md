@@ -203,7 +203,7 @@ what did I change         | Show your uncommitted changes in your folder
 scope check               | Check if you changed files outside your folder
 save my work              | Commit your changes with contamination check
 sync with main            | Rebase your branch onto latest main
-push                      | Commit, sync, push, and show PR URL
+push                      | Commit, sync, push, and create PR with auto-generated title and description
 push failed               | Diagnose why push was rejected and fix it
 update my PR              | Add new commits to existing PR
 I merged the PR           | Sync branch with main after PR is merged
@@ -967,18 +967,46 @@ draft PR opened — CI will run, reviewers not notified yet.
 Next: "next: when ready for review, run /zenith push — Zenith will mark it ready"
 
 If ready for review:
+
+Read commits to generate PR content:
 ```bash
-open "https://github.com/{github_org}/{github_repo}/compare/{base_branch}...{current_branch}?expand=1"
+git log origin/{base_branch}..HEAD --format="%s" | head -1
+git log origin/{base_branch}..HEAD --reverse --format="- %s"
 ```
+
+Print:
+```
+proposed PR:
+title: {first_commit_subject}
+body:
+  {commit_list}
+```
+
+Ask: "Create this PR? [y/edit/n]"
+
+If n:
+```
+PR not created. Create it manually at:
+https://github.com/{github_org}/{github_repo}/compare/{base_branch}...{current_branch}?expand=1
+```
+Stop.
+
+If edit: Ask "Title?" (press Enter to keep current), then "Description?" (press Enter to keep current). Update values.
+
+If y or after edit:
+```bash
+gh pr create --base {base_branch} --head {current_branch} --title "{title}" --body "{body}"
+```
+
 Print:
 ```
 branch:  {current_branch}
 base:    {base_branch}
 commits: {n} ahead of {base_branch}
+PR:      {pr_url}
 ```
-PR: https://github.com/{github_org}/{github_repo}/compare/{base_branch}...{current_branch}?expand=1
 
-Next: "next: PR page opened in your browser — fill in the title and description, then merge. When you come back, Zenith will automatically sync your branch."
+Next: "next: when your PR is merged, run /zenith I merged the PR to sync up"
 
 ### INTENT_MERGE_COMPLETE
 
@@ -1096,16 +1124,16 @@ If yes:
 ```bash
 git commit -m "{message}"          # CMD_COMMIT_WITH_MESSAGE
 git push origin {current_branch}   # CMD_PUSH_SIMPLE
-open "https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}"
+gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open --json url --jq '.[0].url'
 ```
 
 Print:
 ```
 pushed:  {hash} {message}
-PR:      https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}
+PR:      {pr_url}
 ```
 
-Next: "next: PR page opened in your browser"
+Next: "next: PR updated — reviewers will see the new commit"
 
 ### INTENT_STATUS
 

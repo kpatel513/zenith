@@ -18,16 +18,66 @@ Zenith encodes specific expertise about monorepo git workflows, ML project conve
 
 ## Installation
 
+### Prerequisites
+
+- [Claude Code](https://claude.ai/code) installed and working
+- git 2.23+
+- A GitHub repository you can push to
+- bash (macOS and Linux)
+
+### Steps
+
+**1. Run the setup script**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/your-org/zenith/main/scripts/setup.sh | bash
 ```
 
-The setup script will:
-1. Clone Zenith to ~/.zenith
-2. Prompt for your monorepo configuration
-3. Create a gitignored .agent-config in your monorepo root
-4. Symlink the /zenith command into your Claude Code commands
-5. Install a daily cron job for automatic updates
+**2. Enter your monorepo path when prompted**
+
+```
+Monorepo absolute path: /Users/you/code/your-monorepo
+```
+
+This must be the root of your local git clone.
+
+**3. Enter your project folder**
+
+```
+Your project folder name: team-alpha/ml-pipeline
+```
+
+This is the folder inside the monorepo where your work lives. Zenith will scope all git operations to this folder and warn you if changes appear outside it.
+
+**4. Enter your GitHub details**
+
+```
+GitHub organization: your-org
+GitHub repository:   your-repo
+Base branch [main]:  main
+GitHub username:     your-github-username
+```
+
+**5. Verify installation**
+
+Open Claude Code in your monorepo and run:
+
+```
+/zenith help
+```
+
+You should see a table of available commands. If you see `Unknown command: zenith`, the symlink wasn't created — re-run the setup script.
+
+### What the script does
+
+- Clones Zenith to `~/.zenith`
+- Creates `.claude/commands/zenith.md` in your monorepo as a symlink to `~/.zenith/.claude/commands/zenith.md`
+- Writes a `.agent-config` file at your monorepo root (gitignored automatically)
+- Installs a daily cron job (`0 9 * * *`) to keep Zenith up to date silently
+
+### Reinstalling or reconfiguring
+
+The script is idempotent — running it again on a fresh machine won't break anything. To reconfigure an existing install, edit `.agent-config` directly at your monorepo root.
 
 ## Usage
 

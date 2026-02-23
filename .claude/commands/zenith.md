@@ -665,6 +665,7 @@ git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE (apply conflict resolu
 git add {project_folder}/          # CMD_STAGE_FILE (or all if include)
 git commit -m "{message}"          # CMD_COMMIT_WITH_MESSAGE (only if uncommitted changes exist)
 git push -u origin {current_branch}  # CMD_PUSH_SET_UPSTREAM
+open "https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1"
 ```
 
 Print:
@@ -674,9 +675,9 @@ base:    {base_branch}
 commits: {n} ahead of {base_branch}
 ```
 
-PR: [https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1](https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1)
+PR: https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1
 
-Next: "next: open that PR URL to create your pull request"
+Next: "next: PR page opened in your browser — fill in the title and description"
 
 ### INTENT_FIX_PUSH
 
@@ -753,16 +754,16 @@ If yes:
 ```bash
 git commit -m "{message}"          # CMD_COMMIT_WITH_MESSAGE
 git push origin {current_branch}   # CMD_PUSH_SIMPLE
+open "https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}"
 ```
 
 Print:
 ```
 pushed:  {hash} {message}
+PR:      https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}
 ```
 
-PR: [https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}](https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch})
-
-Next: "next: check your PR on GitHub to see the update"
+Next: "next: PR page opened in your browser"
 
 ## Step 5: After Every Operation
 

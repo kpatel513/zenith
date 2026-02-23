@@ -26,6 +26,28 @@ Meanwhile, if she had accidentally edited a file in the payments team's folder, 
 
 ---
 
+## Why not just ask Claude Code directly?
+
+You can. But you'll end up doing this every time:
+
+> *"Please commit my changes — but first check I'm not on main, make sure I haven't touched anything outside team-ml/recommendations, sync with the latest main, then push and open a PR."*
+
+And Claude might do it differently each session. It might forget the contamination check. It doesn't know your folder, your org, or your base branch unless you tell it.
+
+Zenith is pre-configured with that context. It runs the same sequence every time, not based on how you phrase the request.
+
+| | Raw Claude Code | Zenith |
+|---|---|---|
+| Knows your folder | You tell it each time | Pre-configured |
+| Knows your repo/org | You tell it each time | Pre-configured |
+| Safety checks | Run if you ask | Run every time |
+| Push sequence | Depends on your prompt | Always: commit → check scope → sync → push → PR |
+| Consistency | Varies by session | Deterministic |
+
+`/zenith push` does the same thing every time. It's closer to a CLI command than a conversation.
+
+---
+
 ## Who it's for
 
 **Shared monorepos** — multiple people in one repo, each owning a subfolder:

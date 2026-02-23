@@ -672,8 +672,9 @@ Print:
 branch:  {current_branch}
 base:    {base_branch}
 commits: {n} ahead of {base_branch}
-PR:      [https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1](https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1)
 ```
+
+PR: [https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1](https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1)
 
 Next: "next: open that PR URL to create your pull request"
 
@@ -757,8 +758,9 @@ git push origin {current_branch}   # CMD_PUSH_SIMPLE
 Print:
 ```
 pushed:  {hash} {message}
-PR:      [https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}](https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch})
 ```
+
+PR: [https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}](https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch})
 
 Next: "next: check your PR on GitHub to see the update"
 

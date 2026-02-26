@@ -108,6 +108,45 @@ Extension matches any of:
 
 If matched: `ml output: {file}`
 
+#### Content Scanning — Secret Patterns
+
+**See tools/common-commands.md for shared command patterns (CMD_*).**
+
+For each changed file, scan diff lines starting with `+` for secret patterns. Filename checks alone miss credentials embedded in non-credential-named files (e.g., `.env.example` renamed to `config.py`).
+
+Command to scan each staged file:
+```bash
+git diff --cached -- {file} | grep -E '^\+' | grep -iE '{pattern}'
+```
+
+Patterns to scan for:
+
+| Pattern | Matches |
+|---|---|
+| `AKIA[0-9A-Z]{16}` | AWS access key ID |
+| `sk-[a-zA-Z0-9]{48}` | OpenAI API key |
+| `ghp_[a-zA-Z0-9]{36}` | GitHub personal access token |
+| `xoxb-[0-9]+-[0-9]+-[a-zA-Z0-9]+` | Slack bot token |
+| `api[_-]?key\s*=\s*["'][a-zA-Z0-9/+]{20,}` | Generic named API key assignment |
+| `secret\s*=\s*["'][a-zA-Z0-9/+]{20,}` | Generic named secret assignment |
+
+Run each pattern separately against each staged file. If a match is found, record the line number and pattern type.
+
+Output format — append as `│` lines under the relevant file in the contamination check output:
+```
+│   ⚠ secret pattern  line {n}: possible AWS access key
+│   ⚠ secret pattern  line {n}: possible OpenAI API key
+```
+
+When secret patterns are found, block commit and require explicit confirmation:
+```
+credentials detected — possible secret values in staged content
+│ {file}: line {n}: possible {pattern_type}
+│ review these lines before committing
+
+Type YES to commit anyway (not "yes", not "y"):
+```
+
 ## Output Format
 
 ### Full Check (INTENT_CHECK_SCOPE)

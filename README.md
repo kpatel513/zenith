@@ -118,7 +118,7 @@ curl -fsSL https://raw.githubusercontent.com/kpatel513/zenith/main/scripts/setup
 This installs Zenith to `~/.zenith`, makes `/zenith` available in every Claude Code session on your machine, and asks one question:
 
 ```
-GitHub username: alice
+GitHub username: [your github username]
 ```
 
 That's it. Zenith is installed globally. You don't configure repos here — that happens automatically the first time you use `/zenith` in each repo.

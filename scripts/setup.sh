@@ -65,15 +65,28 @@ if [ ! -d "$CLAUDE_COMMANDS_DIR" ]; then
     echo "✓ Created"
 fi
 
-# Symlink zenith.md
+# Symlink zenith.md into the repo
 SYMLINK_TARGET="$CLAUDE_COMMANDS_DIR/zenith.md"
 if [ -L "$SYMLINK_TARGET" ] || [ -f "$SYMLINK_TARGET" ]; then
     echo "Removing existing zenith.md..."
     rm -f "$SYMLINK_TARGET"
 fi
-echo "Creating symlink to zenith.md..."
+echo "Creating repo symlink to zenith.md..."
 ln -s "$ZENITH_DIR/.claude/commands/zenith.md" "$SYMLINK_TARGET"
-echo "✓ Symlinked"
+echo "✓ Symlinked (repo)"
+
+# Symlink zenith.md globally so /zenith works in any Claude Code session
+GLOBAL_COMMANDS_DIR="$HOME/.claude/commands"
+if [ ! -d "$GLOBAL_COMMANDS_DIR" ]; then
+    mkdir -p "$GLOBAL_COMMANDS_DIR"
+fi
+GLOBAL_SYMLINK="$GLOBAL_COMMANDS_DIR/zenith.md"
+if [ -L "$GLOBAL_SYMLINK" ] || [ -f "$GLOBAL_SYMLINK" ]; then
+    rm -f "$GLOBAL_SYMLINK"
+fi
+echo "Creating global symlink to zenith.md..."
+ln -s "$ZENITH_DIR/.claude/commands/zenith.md" "$GLOBAL_SYMLINK"
+echo "✓ Symlinked (global — /zenith works from any directory)"
 
 # Write .agent-config
 CONFIG_FILE="$MONOREPO_PATH/.agent-config"

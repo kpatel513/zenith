@@ -1536,17 +1536,27 @@ Next: "next: fix the failure, then run /zenith push to add a new commit and re-t
 Execute:
 ```bash
 git fetch --prune origin           # CMD_FETCH_ORIGIN
-git branch --merged origin/{base_branch} --format="%(refname:short) %(committerdate:relative)"
 ```
 
-Filter to branches authored by {github_username}:
+Get merged branches via two methods, then union the results:
+
 ```bash
-git branch --merged origin/{base_branch} --format="%(refname:short)" | while read b; do
-  git log -1 --format="%ae" "$b"
-done
+# Method 1: regular merges — tracked by git ancestry
+git branch --merged origin/{base_branch} --format="%(refname:short)" | grep -v "^{base_branch}$"
+
+# Method 2: squash merges — tracked by GitHub PR history
+# git ancestry cannot detect squash merges; gh pr list catches them
+gh pr list --repo {github_org}/{github_repo} --state merged --base {base_branch} \
+  --json headRefName,author \
+  --jq '.[] | select(.author.login == "{github_username}") | .headRefName'
 ```
 
-Show only branches where author email matches the user. Exclude `{base_branch}`.
+Cross-reference the unioned list against locally existing branches:
+```bash
+git branch --format="%(refname:short)"
+```
+
+Keep only branches that exist locally. Filter to branches where the most recent commit author matches {github_username}. Exclude `{base_branch}`.
 
 If none:
 ```
@@ -1567,9 +1577,11 @@ Delete all? [y/n] (or enter numbers to pick specific ones)
 
 Execute for each selected:
 ```bash
-git branch -d {branch}
-git push origin --delete {branch}
+git branch -D {branch}
+git push origin --delete {branch} 2>/dev/null || true
 ```
+
+Note: `-D` is used instead of `-d` because squash-merged branches have no git ancestry link to {base_branch}, so git will refuse to delete them with `-d` even though they are safely merged. The remote delete is silenced — GitHub often auto-deletes branches after PR merge.
 
 Print:
 ```

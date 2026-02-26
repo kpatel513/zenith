@@ -42,9 +42,11 @@ make_source_repo() {
 run_setup() {
     # $1 = ZENITH_DIR override
     # $2 = ZENITH_REPO override
-    # $3 = stdin (heredoc)
+    # $3 = stdin (heredoc) — now just the GitHub username
+    # GLOBAL_COMMANDS_DIR is set to a subdir of ZENITH_DIR to avoid touching ~/.claude/commands
     # TTY=/dev/stdin lets tests inject input via heredoc instead of /dev/tty
-    ZENITH_DIR="$1" ZENITH_REPO="$2" TTY=/dev/stdin bash "$REPO_ROOT/scripts/setup.sh" \
+    ZENITH_DIR="$1" ZENITH_REPO="$2" GLOBAL_COMMANDS_DIR="$1/global-commands" \
+        TTY=/dev/stdin bash "$REPO_ROOT/scripts/setup.sh" \
         <<< "$3" 2>/dev/null
 }
 
@@ -56,32 +58,19 @@ test_fresh_install() {
     echo
     echo "test: fresh install"
 
-    local source_repo zenith_dir monorepo
+    local source_repo zenith_dir
     source_repo=$(make_source_repo)
     zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
-    monorepo=$(mktemp -d); git init "$monorepo" --quiet
 
-    local input
-    input="$monorepo
-my-project
-my-org
-my-repo
-main
-myuser"
+    run_setup "$zenith_dir" "$source_repo" "myuser"
 
-    run_setup "$zenith_dir" "$source_repo" "$input"
+    assert_dir     "$zenith_dir"                                "cloned zenith to ZENITH_DIR"
+    assert_symlink "$zenith_dir/global-commands/zenith.md"      "created global zenith.md symlink"
+    assert_file    "$zenith_dir/.global-config"                 "wrote .global-config"
+    assert_contains "myuser" "$zenith_dir/.global-config"       ".global-config: github_username"
+    assert_file    "$zenith_dir/.setup-complete"                "wrote .setup-complete marker"
 
-    assert_dir     "$zenith_dir"                                  "cloned zenith to ZENITH_DIR"
-    assert_symlink "$monorepo/.claude/commands/zenith.md"         "created zenith.md symlink"
-    assert_file    "$monorepo/.agent-config"                      "wrote .agent-config"
-    assert_contains "my-org"     "$monorepo/.agent-config"        ".agent-config: github_org"
-    assert_contains "my-repo"    "$monorepo/.agent-config"        ".agent-config: github_repo"
-    assert_contains "my-project" "$monorepo/.agent-config"        ".agent-config: project_folder"
-    assert_contains "myuser"     "$monorepo/.agent-config"        ".agent-config: github_username"
-    assert_contains "main"       "$monorepo/.agent-config"        ".agent-config: base_branch"
-    assert_contains ".agent-config" "$monorepo/.gitignore"        ".agent-config added to .gitignore"
-
-    rm -rf "$source_repo" "$zenith_dir" "$monorepo"
+    rm -rf "$source_repo" "$zenith_dir"
 }
 
 # ---------------------------------------------------------------------------
@@ -109,93 +98,6 @@ test_idempotent() {
 }
 
 # ---------------------------------------------------------------------------
-# Test: .agent-config entry not duplicated on reinstall
-# ---------------------------------------------------------------------------
-
-test_gitignore_no_duplicates() {
-    echo
-    echo "test: .gitignore — no duplicate .agent-config entry"
-
-    local source_repo zenith_dir monorepo
-    source_repo=$(make_source_repo)
-    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
-    monorepo=$(mktemp -d); git init "$monorepo" --quiet
-    echo ".agent-config" > "$monorepo/.gitignore"  # already present
-
-    local input
-    input="$monorepo
-my-project
-my-org
-my-repo
-main
-myuser"
-
-    run_setup "$zenith_dir" "$source_repo" "$input"
-
-    local count
-    count=$(grep -c "^\.agent-config$" "$monorepo/.gitignore" || true)
-    [ "$count" -eq 1 ] \
-        && pass ".agent-config appears exactly once in .gitignore" \
-        || fail ".agent-config appears exactly once in .gitignore (found $count)"
-
-    rm -rf "$source_repo" "$zenith_dir" "$monorepo"
-}
-
-# ---------------------------------------------------------------------------
-# Test: existing .gitignore content is preserved
-# ---------------------------------------------------------------------------
-
-test_existing_gitignore_preserved() {
-    echo
-    echo "test: existing .gitignore content preserved"
-
-    local source_repo zenith_dir monorepo
-    source_repo=$(make_source_repo)
-    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
-    monorepo=$(mktemp -d); git init "$monorepo" --quiet
-    printf "*.pyc\n__pycache__/\n" > "$monorepo/.gitignore"
-
-    local input
-    input="$monorepo
-my-project
-my-org
-my-repo
-main
-myuser"
-
-    run_setup "$zenith_dir" "$source_repo" "$input"
-
-    assert_contains "*.pyc"        "$monorepo/.gitignore" "existing *.pyc entry preserved"
-    assert_contains "__pycache__/" "$monorepo/.gitignore" "existing __pycache__/ entry preserved"
-    assert_contains ".agent-config" "$monorepo/.gitignore" ".agent-config appended"
-
-    rm -rf "$source_repo" "$zenith_dir" "$monorepo"
-}
-
-# ---------------------------------------------------------------------------
-# Test: invalid monorepo path exits non-zero
-# ---------------------------------------------------------------------------
-
-test_invalid_monorepo_path() {
-    echo
-    echo "test: invalid monorepo path"
-
-    local zenith_dir
-    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
-
-    local exit_code
-    ZENITH_DIR="$zenith_dir" ZENITH_REPO="/dev/null" \
-        bash "$REPO_ROOT/scripts/setup.sh" \
-        <<< "/nonexistent/path/that/does/not/exist" \
-        >/dev/null 2>&1 || exit_code=$?
-    exit_code="${exit_code:-0}"
-
-    assert_exit_nonzero "$exit_code" "exits non-zero for invalid monorepo path"
-
-    rm -rf "$zenith_dir"
-}
-
-# ---------------------------------------------------------------------------
 # Test: partial install (dir exists, no marker) — cleans up and completes
 # ---------------------------------------------------------------------------
 
@@ -203,29 +105,62 @@ test_partial_install_recovery() {
     echo
     echo "test: partial install recovery"
 
-    local source_repo zenith_dir monorepo
+    local source_repo zenith_dir
     source_repo=$(make_source_repo)
     zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
-    monorepo=$(mktemp -d); git init "$monorepo" --quiet
 
     # Simulate a partial install: directory exists but no .setup-complete marker
     mkdir -p "$zenith_dir"
 
-    local input
-    input="$monorepo
-my-project
-my-org
-my-repo
-main
-myuser"
+    run_setup "$zenith_dir" "$source_repo" "myuser"
 
-    run_setup "$zenith_dir" "$source_repo" "$input"
+    assert_file    "$zenith_dir/.global-config"     "recovered: wrote .global-config"
+    assert_file    "$zenith_dir/.setup-complete"    "recovered: wrote .setup-complete marker"
 
-    assert_file    "$monorepo/.agent-config"              "recovered: wrote .agent-config"
-    assert_symlink "$monorepo/.claude/commands/zenith.md" "recovered: created zenith.md symlink"
-    assert_file    "$zenith_dir/.setup-complete"          "recovered: wrote .setup-complete marker"
+    rm -rf "$source_repo" "$zenith_dir"
+}
 
-    rm -rf "$source_repo" "$zenith_dir" "$monorepo"
+# ---------------------------------------------------------------------------
+# Test: .global-config contains correct username
+# ---------------------------------------------------------------------------
+
+test_global_config_username() {
+    echo
+    echo "test: global config stores username correctly"
+
+    local source_repo zenith_dir
+    source_repo=$(make_source_repo)
+    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
+
+    run_setup "$zenith_dir" "$source_repo" "bob-the-dev"
+
+    assert_contains "bob-the-dev" "$zenith_dir/.global-config" "username written to .global-config"
+    assert_not_contains "github_org"  "$zenith_dir/.global-config" "no github_org in .global-config (repo-specific)"
+    assert_not_contains "base_branch" "$zenith_dir/.global-config" "no base_branch in .global-config (repo-specific)"
+
+    rm -rf "$source_repo" "$zenith_dir"
+}
+
+# ---------------------------------------------------------------------------
+# Test: no .agent-config or .gitignore written (repo config is zenith's job)
+# ---------------------------------------------------------------------------
+
+test_no_repo_files_written() {
+    echo
+    echo "test: setup does not write repo-level files"
+
+    local source_repo zenith_dir check_dir
+    source_repo=$(make_source_repo)
+    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
+    check_dir=$(mktemp -d)  # a plain dir to check — setup shouldn't touch it
+
+    run_setup "$zenith_dir" "$source_repo" "myuser"
+
+    [ ! -f "$check_dir/.agent-config" ] \
+        && pass "no .agent-config written outside repo" \
+        || fail "no .agent-config written outside repo"
+
+    rm -rf "$source_repo" "$zenith_dir" "$check_dir"
 }
 
 # ---------------------------------------------------------------------------
@@ -234,31 +169,22 @@ myuser"
 
 test_symlink_target() {
     echo
-    echo "test: symlink points to ZENITH_DIR"
+    echo "test: global symlink points to ZENITH_DIR"
 
-    local source_repo zenith_dir monorepo
+    local source_repo zenith_dir
     source_repo=$(make_source_repo)
     zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
-    monorepo=$(mktemp -d); git init "$monorepo" --quiet
 
-    local input
-    input="$monorepo
-my-project
-my-org
-my-repo
-main
-myuser"
-
-    run_setup "$zenith_dir" "$source_repo" "$input"
+    run_setup "$zenith_dir" "$source_repo" "myuser"
 
     local link target
-    link="$monorepo/.claude/commands/zenith.md"
+    link="$zenith_dir/global-commands/zenith.md"
     target=$(readlink "$link" 2>/dev/null || echo "")
     echo "$target" | grep -q "$zenith_dir" \
         && pass "symlink target contains ZENITH_DIR path" \
         || fail "symlink target contains ZENITH_DIR path (got: $target)"
 
-    rm -rf "$source_repo" "$zenith_dir" "$monorepo"
+    rm -rf "$source_repo" "$zenith_dir"
 }
 
 # ---------------------------------------------------------------------------
@@ -271,9 +197,8 @@ echo "=============="
 test_fresh_install
 test_idempotent
 test_partial_install_recovery
-test_gitignore_no_duplicates
-test_existing_gitignore_preserved
-test_invalid_monorepo_path
+test_global_config_username
+test_no_repo_files_written
 test_symlink_target
 
 echo

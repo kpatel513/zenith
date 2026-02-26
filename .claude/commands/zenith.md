@@ -226,6 +226,8 @@ Map user's request to ONE intent. Use both request text AND situation to classif
 - `INTENT_DRAFT_PR` - draft PR, open draft, push as draft, WIP PR
 - `INTENT_FIX_CI` - CI failed, tests failing, build broke, CI is red, check CI
 - `INTENT_CLEANUP_BRANCHES` - clean up branches, delete old branches, remove merged branches
+- `INTENT_CLEAN_HISTORY` - tangled history, clean history, remove merge commits, fix PR diff, too many files changed
+- `INTENT_MOVE_COMMITS` - committed to wrong branch, move commits, commits on wrong branch
 - `INTENT_UNSTASH` - unstash, restore my stash, get my changes back
 - `INTENT_FIX_CONFLICT` - PR has conflicts, merge conflict on GitHub, can't merge PR
 - `INTENT_HELP` - help, what can you do, what commands exist
@@ -250,7 +252,7 @@ push failed               | Diagnose why push was rejected and fix it
 update my PR              | Add new commits to existing PR
 I merged the PR           | Sync branch with main after PR is merged
 undo last commit          | Soft reset - undo commit but keep changes
-throw away changes        | Hard reset - permanently discard everything
+throw away changes        | Discard all uncommitted changes in your project folder
 what's staged             | Show what's in staging area
 forgot a file             | Add file to last commit (amend)
 split commits             | Separate changes into multiple commits
@@ -260,6 +262,8 @@ status                    | Show branch, PR, and changes summary in one view
 draft PR                  | Push branch as draft PR (starts CI, no review yet)
 CI failed                 | Show which CI step failed and link to logs
 clean up branches         | Delete your old merged branches
+clean up history          | Remove merge commits, replay your commits cleanly onto main
+move my commits           | Cherry-pick commits to correct branch and remove from this one
 unstash                   | Restore changes saved by a previous stash
 PR has conflicts          | Resolve merge conflict blocking your PR
 help                      | Show this table
@@ -939,6 +943,21 @@ git add {file}
 git rebase --continue              # CMD_REBASE_CONTINUE
 ```
 
+On rebase success, run post-rebase sanity check:
+```bash
+git log origin/{base_branch}..HEAD --merges --oneline
+```
+
+If merge commits found:
+```
+warning — merge commits found in your branch after sync
+│ these shouldn't be here after a clean rebase:
+│   {hash} Merge branch 'feature/teammate' into ...
+│ this may mean your branch was rebased onto the wrong base at some point
+│ inspect: git log origin/{base_branch}..HEAD --oneline
+│ to clean: run /zenith clean up history
+```
+
 On success:
 ```
   ✓ synced   {current_branch}
@@ -1033,14 +1052,15 @@ Next: "next: make changes and commit again, or run /zenith throw away changes to
 
 Execute:
 ```bash
-git status --short
+git status --short -- {project_folder}/
 ```
 
 Print:
 ```
-⚠ discarding all changes — this cannot be undone
-│ every tracked file resets to your last commit
-│ new files you created will be permanently deleted
+⚠ discarding changes in {project_folder}/ — this cannot be undone
+│ every file in `{project_folder}/` resets to your last commit
+│ new files you created in {project_folder}/ will be permanently deleted
+│ changes outside {project_folder}/ are NOT affected
 │ there is no recovery after this
 
   these will be lost:
@@ -1054,13 +1074,14 @@ Read response. Must be exactly "YES" (not "yes", not "y").
 
 If "YES":
 ```bash
-git reset --hard HEAD
-git clean -fd
+git restore --staged {project_folder}/
+git restore {project_folder}/
+git clean -fd {project_folder}/
 ```
 
 Print:
 ```
-  ✓ clean  all uncommitted changes discarded
+  ✓ clean  all uncommitted changes in {project_folder}/ discarded
 ```
 
 Else:
@@ -1565,12 +1586,18 @@ nothing to clean — no merged branches found for {github_username}
 ```
 Stop.
 
+For each branch in the list, fetch its tip hash before displaying:
+```bash
+git log -1 --format="%h" {branch}
+```
+
 Print:
 ```
 merged branches — safe to delete, already in {base_branch}
-│ 1. feature/old-thing    last commit 3 weeks ago
-│ 2. feature/done-work    last commit 2 months ago
+│ 1. feature/old-thing    last commit 3 weeks ago    tip a1b2c3d
+│ 2. feature/done-work    last commit 2 months ago   tip e4f5g6h
 │ remotes already deleted by GitHub after merge
+│ to recover a deleted branch: git checkout -b recovered {tip-hash}
 
 Delete all? [y/n] (or enter numbers to pick specific ones)
 ```
@@ -1590,6 +1617,187 @@ Print:
 ```
 
 Next: "next: your branch list is clean"
+
+### INTENT_CLEAN_HISTORY
+
+Check situation. If S5 or S6 (uncommitted or staged changes):
+```
+blocked — you have uncommitted changes
+│ save or discard them before cleaning history
+│ run /zenith save or /zenith throw away changes
+```
+Stop.
+
+Execute:
+```bash
+git log origin/{base_branch}..HEAD --merges --oneline
+git log origin/{base_branch}..HEAD --no-merges --oneline
+```
+
+If no merge commits found:
+```
+history is clean — no merge commits found between {current_branch} and {base_branch}
+│ your branch already has a linear history
+```
+Stop.
+
+Print:
+```
+tangled history — your branch contains merge commits from {base_branch}
+│ these make your PR diff show unrelated files that are already merged
+│ merge commits (will be removed):
+│   {hash} Merge branch 'main' into feature/...
+│
+│ your commits (will be kept):
+│   {hash} {message}
+│   {hash} {message}
+│
+│ this rewrites history — if you have an open PR it will update automatically
+│ reviewer comments stay attached to the code, not the commit hash
+
+Clean history now? [y/n]
+```
+
+If no:
+```
+  cancelled  your branch is unchanged
+```
+Stop.
+
+Execute:
+```bash
+git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
+```
+
+If conflicts: apply three-tier conflict resolution (same rules as INTENT_SYNC — see INTENT_SYNC conflict rules above):
+- To cancel: `git rebase --abort`
+- Tier 1 (file outside {project_folder}): stop, do not resolve
+- Tier 2 (mechanical): auto-resolve, `git add {file}`, `git rebase --continue`
+- Tier 3 (substantive): show both versions, ask [y/i/e], `git add {file}`, `git rebase --continue`
+
+Check if open PR exists:
+```bash
+gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open --limit 1
+```
+
+If open PR exists, force-push:
+```bash
+git push origin {current_branch} --force-with-lease    # CMD_PUSH_FORCE_WITH_LEASE
+```
+
+Print:
+```
+  ✓ cleaned  {current_branch}
+  removed    {n} merge commit(s)
+  kept       {n} your commit(s)
+  ahead      {n} commits ahead of {base_branch}
+```
+
+Next: "next: run /zenith push to push your clean history"
+
+### INTENT_MOVE_COMMITS
+
+Check situation. If S5 or S6 (uncommitted or staged changes):
+```
+blocked — you have uncommitted changes
+│ save or discard them before moving commits
+│ run /zenith save or /zenith throw away changes
+```
+Stop.
+
+If on {base_branch}:
+```
+blocked — you are on {base_branch}
+│ commits on {base_branch} cannot be moved this way
+│ switch to a feature branch first
+```
+Stop.
+
+Show commits available to move:
+```bash
+git log origin/{base_branch}..HEAD --oneline --reverse --format="%h %s"
+```
+
+If no commits found:
+```
+nothing to move — no commits on this branch ahead of {base_branch}
+│ make some commits first, then run /zenith move my commits
+```
+Stop.
+
+Print:
+```
+commits on this branch — select which to move
+│ 1. {hash} {message}  (oldest)
+│ 2. {hash} {message}
+│ 3. {hash} {message}  (newest)
+
+Which to move? (numbers, e.g. "1 2 3" or "all")
+```
+
+Ask: "Move to which branch? (new branch name, or existing branch name)"
+
+If new branch:
+```bash
+git fetch origin                           # CMD_FETCH_ORIGIN
+git checkout -b {target} origin/{base_branch}
+```
+
+If existing branch:
+```bash
+git fetch origin                           # CMD_FETCH_ORIGIN
+git checkout {target}
+```
+
+Cherry-pick selected commits in order (oldest first):
+```bash
+git cherry-pick {hash1} {hash2} ...
+```
+
+If conflicts during cherry-pick, apply three-tier conflict resolution:
+- To cancel: `git cherry-pick --abort`
+- Tier 1 (file outside {project_folder}): stop, do not resolve
+- Tier 2 (mechanical): auto-resolve, `git add {file}`, `git cherry-pick --continue`
+- Tier 3 (substantive): show both versions, ask [y/i/e], `git add {file}`, `git cherry-pick --continue`
+
+Print cherry-pick result:
+```
+  ✓ cherry-picked  {n} commit(s) onto {target}
+    {hash} {message}
+    {hash} {message}
+```
+
+Return to source branch:
+```bash
+git checkout {source_branch}
+```
+
+Print:
+```
+remove from {source_branch} — clean up after moving
+│ the {n} commit(s) are now on {target}
+│ this resets {source_branch} — changes remain in your working tree if you moved all commits
+
+Remove from {source_branch}? [y/n]
+```
+
+If yes, remove commits from source branch:
+- If ALL commits were moved: `git reset --hard origin/{base_branch}`
+- If LAST N commits were moved (contiguous from HEAD): `git reset --hard HEAD~{n}`
+- If non-contiguous selection: `git reset --soft {hash_before_first_selected}` then re-commit only the non-moved ones
+
+Print:
+```
+  ✓ moved    {n} commit(s) → {target}
+  ✓ removed  from {source_branch}
+```
+
+If no:
+```
+  skipped  commits remain on {source_branch}
+```
+
+Next: "next: run /zenith push on {target} to open a PR"
 
 ### INTENT_UNSTASH
 

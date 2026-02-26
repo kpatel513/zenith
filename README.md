@@ -107,71 +107,52 @@ It's especially useful for people who are strong in their domain — ML, data, d
 
 ## Install
 
-### Step 1 — Install Zenith globally
+### Step 1 — Install Zenith globally (once per machine)
 
-Run this from your terminal — anywhere, not inside a repo:
+Run this from your terminal — anywhere:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kpatel513/zenith/main/scripts/setup.sh | bash
 ```
 
-This installs Zenith to `~/.zenith` and makes `/zenith` available in every Claude Code session on your machine. It also configures Zenith for your first repo — the script will ask a few questions.
+This installs Zenith to `~/.zenith`, makes `/zenith` available in every Claude Code session on your machine, and asks one question:
+
+```
+GitHub username: alice
+```
+
+That's it. Zenith is installed globally. You don't configure repos here — that happens automatically the first time you use `/zenith` in each repo.
 
 ---
 
-**Question 1 — Where is your repo?**
+### Step 2 — Use /zenith in a repo (configures itself on first run)
+
+Open Claude Code from inside any repo and run any `/zenith` command:
 
 ```
-Repo absolute path: /Users/alice/code/company-repo
+/zenith start new work
 ```
 
-The root folder of your local clone — the directory that contains the `.git/` folder. Not sure? Run this inside your repo:
-
-```bash
-git rev-parse --show-toplevel
-```
-
-It prints the exact path to paste in.
-
----
-
-**Question 2 — Which folder is yours?**
-
-**Shared monorepo** — enter the subfolder where your work lives, relative to the repo root:
+If this is the first time Zenith has been used in that repo, it detects there's no config and walks you through 4 quick questions before continuing:
 
 ```
-Your project folder: team-ml/recommendations
+first-time setup — no config found for this repo
+│ detected: /Users/alice/code/company-repo
+│ answering 4 questions configures Zenith for this repo permanently
+│ your answers are saved locally and never committed to GitHub
+
+Your project folder (or . for whole repo): team-ml/recommendations
+GitHub organization:                       acme-corp
+GitHub repository:                         company-repo
+Base branch [main]:                        main
+
+  ✓ config saved  /Users/alice/code/company-repo/.agent-config
+  ✓ gitignore     .agent-config will not be committed
 ```
 
-Examples: `team-alpha/backend`, `ml/training-pipeline`, `services/auth`
+From that point on, `/zenith` in that repo reads the saved config and runs without asking again.
 
-Zenith scopes commits, diffs, and safety checks to this folder and warns you if you accidentally touch anything outside it.
-
-**Solo or whole-repo** — press Enter or type `.`:
-
-```
-Your project folder: .
-```
-
-Zenith will still handle branching, syncing, and PRs — it just won't scope checks to a subfolder.
-
----
-
-**Question 3 — Your GitHub details**
-
-```
-GitHub organization: acme-corp
-GitHub repository:   company-repo
-Base branch [main]:  main
-GitHub username:     alice
-```
-
-- **Organization** — the org or account name from your GitHub URL
-- **Repository** — the repo name
-- **Base branch** — the branch your team merges into, almost always `main`
-- **Username** — your GitHub handle
-
-Press Enter on base branch to accept `main` as the default.
+**Adding a new repo later?** Just open Claude Code in that repo and run any `/zenith` command. Same first-time setup, same 4 questions.
 
 ---
 
@@ -191,24 +172,10 @@ You'll see a table of everything Zenith can do.
 
 - Installs Zenith to `~/.zenith` on your machine
 - Creates `~/.claude/commands/zenith.md` — makes `/zenith` available in every Claude Code session, regardless of which directory you open it from
-- Creates `.claude/commands/zenith.md` in your repo — a fallback for repo-level discovery
-- Writes `.agent-config` at your repo root with your settings
-- Adds `.agent-config` to your repo's `.gitignore` automatically — **it is never committed to GitHub**, each person has their own private copy
+- Writes `~/.zenith/.global-config` with your GitHub username — pre-fills it for every repo you configure
 - Installs a daily background update so you always have the latest version
 
-**New machine or reinstalling?** The setup script is safe to re-run. It won't overwrite anything or create duplicates. To change a setting after setup, edit `.agent-config` at your repo root directly.
-
----
-
-### Step 2 — Configure each repo you work in
-
-After the initial install, adding Zenith to another repo takes one command:
-
-```bash
-~/.zenith/scripts/setup.sh
-```
-
-Run this from anywhere — it will ask for the repo path and your settings for that project. Your global `/zenith` command is already set up from Step 1; this just creates the `.agent-config` for the new repo.
+**New machine or reinstalling?** The setup script is safe to re-run. It won't overwrite anything or create duplicates. To change your username after setup, edit `~/.zenith/.global-config` directly.
 
 ---
 
@@ -246,7 +213,7 @@ You don't have to memorize exact phrases. Zenith understands intent.
 
 ## Your settings
 
-After setup, `.agent-config` lives at your repo root. **It is never committed to GitHub** — setup automatically adds it to `.gitignore`. Each team member runs setup once and gets their own private copy with their own folder and username.
+After first use in a repo, `.agent-config` lives at your repo root. **It is never committed to GitHub** — Zenith automatically adds it to `.gitignore`. Each team member runs the first-time setup once and gets their own private copy with their own folder and username.
 
 ```ini
 [repo]
@@ -275,19 +242,33 @@ Nothing to maintain.
 
 ---
 
+## Uninstall
+
+```bash
+~/.zenith/scripts/uninstall.sh
+```
+
+This removes the global symlink, the cron job, and the `~/.zenith` directory. Your per-repo `.agent-config` files are not touched — remove them manually if you want:
+
+```bash
+rm /path/to/repo/.agent-config
+```
+
+---
+
 ## Troubleshooting
 
 **`/zenith` not recognized in Claude Code**
-Run `ls ~/.claude/commands/zenith.md` to check if the global symlink exists. If it's missing, re-run `~/.zenith/scripts/setup.sh` — it will recreate it.
+Run `ls ~/.claude/commands/zenith.md` to check if the global symlink exists. If it's missing, re-run the install command.
 
-**"no .agent-config found" error**
-Open Claude Code from your repo root — the same folder where `.git/` lives.
+**First-time setup not appearing**
+Make sure you're opening Claude Code from inside a git repository. Zenith detects the repo automatically — it won't run if there's no `.git/` folder in the tree.
 
 **Push rejected**
 Run `/zenith push failed`. Zenith will diagnose and fix the most common causes.
 
 **Your folder warning on startup**
-If Zenith warns that your `project_folder` doesn't exist, edit `.agent-config` and correct the path, or re-run setup.
+If Zenith warns that your `project_folder` doesn't exist, edit `.agent-config` at your repo root and correct the path.
 
 ---
 

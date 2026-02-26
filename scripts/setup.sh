@@ -42,6 +42,7 @@ echo "-------------"
 echo
 
 read -rp "Repo absolute path: " MONOREPO_PATH <"$TTY"
+MONOREPO_PATH="${MONOREPO_PATH/#\~/$HOME}"
 if [ ! -d "$MONOREPO_PATH" ]; then
     echo "Error: Directory $MONOREPO_PATH does not exist"
     exit 1

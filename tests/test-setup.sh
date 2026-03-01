@@ -33,6 +33,8 @@ make_source_repo() {
     git init "$dir" --quiet
     mkdir -p "$dir/.claude/commands"
     touch "$dir/.claude/commands/zenith.md"
+    mkdir -p "$dir/.cursor/rules"
+    touch "$dir/.cursor/rules/zenith.mdc"
     git -C "$dir" add . 2>/dev/null
     git -C "$dir" -c user.email="test@test.com" -c user.name="Test" \
         commit -m "init" --quiet
@@ -42,12 +44,16 @@ make_source_repo() {
 run_setup() {
     # $1 = ZENITH_DIR override
     # $2 = ZENITH_REPO override
-    # $3 = stdin (heredoc) — now just the GitHub username
+    # $3 = GitHub username
+    # $4 = cursor install answer (y/n, default n)
     # GLOBAL_COMMANDS_DIR is set to a subdir of ZENITH_DIR to avoid touching ~/.claude/commands
+    # GLOBAL_CURSOR_RULES_DIR is set to a subdir of ZENITH_DIR to avoid touching ~/.cursor/rules
     # TTY=/dev/stdin lets tests inject input via heredoc instead of /dev/tty
+    local cursor_ans="${4:-n}"
     ZENITH_DIR="$1" ZENITH_REPO="$2" GLOBAL_COMMANDS_DIR="$1/global-commands" \
+        GLOBAL_CURSOR_RULES_DIR="$1/cursor-rules" \
         TTY=/dev/stdin bash "$REPO_ROOT/scripts/setup.sh" \
-        <<< "$3" 2>/dev/null
+        <<< "$(printf '%s\n%s\n' "$3" "$cursor_ans")" 2>/dev/null
 }
 
 # ---------------------------------------------------------------------------
@@ -188,6 +194,33 @@ test_symlink_target() {
 }
 
 # ---------------------------------------------------------------------------
+# Test: cursor opt-in creates symlink; opt-out skips it
+# ---------------------------------------------------------------------------
+
+test_cursor_install() {
+    echo
+    echo "test: cursor opt-in creates symlink; opt-out skips"
+
+    local source_repo zenith_dir
+    source_repo=$(make_source_repo)
+    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
+
+    # opt-in: symlink should be created
+    run_setup "$zenith_dir" "$source_repo" "myuser" "y"
+    assert_symlink "$zenith_dir/cursor-rules/zenith.mdc" "cursor rule symlink created on opt-in"
+    rm -rf "$zenith_dir"
+
+    # opt-out: symlink should not be created
+    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
+    run_setup "$zenith_dir" "$source_repo" "myuser" "n"
+    [ ! -e "$zenith_dir/cursor-rules/zenith.mdc" ] \
+        && pass "no cursor rule symlink on opt-out" \
+        || fail "no cursor rule symlink on opt-out"
+
+    rm -rf "$source_repo" "$zenith_dir"
+}
+
+# ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
 
@@ -200,6 +233,7 @@ test_partial_install_recovery
 test_global_config_username
 test_no_repo_files_written
 test_symlink_target
+test_cursor_install
 
 echo
 echo "results: $PASS passed, $FAIL failed"

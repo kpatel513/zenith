@@ -12,6 +12,8 @@ ZENITH_REPO="${ZENITH_REPO:-https://github.com/kpatel513/zenith.git}"
 TTY="${TTY:-/dev/tty}"
 # Tests override this to avoid touching real ~/.claude/commands
 GLOBAL_COMMANDS_DIR="${GLOBAL_COMMANDS_DIR:-$HOME/.claude/commands}"
+# Tests override this to avoid touching real ~/.cursor/rules
+GLOBAL_CURSOR_RULES_DIR="${GLOBAL_CURSOR_RULES_DIR:-$HOME/.cursor/rules}"
 
 echo "Zenith Setup"
 echo "============"
@@ -45,6 +47,7 @@ echo "-------------"
 echo
 
 read -rp "GitHub username: " GITHUB_USERNAME <"$TTY"
+read -rp "Install Cursor rule? [y/N]: " INSTALL_CURSOR <"$TTY"
 
 echo
 
@@ -59,6 +62,19 @@ fi
 echo "Creating global symlink to zenith.md..."
 ln -s "$ZENITH_DIR/.claude/commands/zenith.md" "$GLOBAL_SYMLINK"
 echo "✓ Symlinked (global — /zenith works from any directory)"
+
+# Install Cursor rule (global, opt-in)
+if [[ "${INSTALL_CURSOR:-n}" =~ ^[Yy]$ ]]; then
+    CURSOR_RULE_TARGET="$GLOBAL_CURSOR_RULES_DIR/zenith.mdc"
+    CURSOR_RULE_SOURCE="$ZENITH_DIR/.cursor/rules/zenith.mdc"
+    mkdir -p "$GLOBAL_CURSOR_RULES_DIR"
+    if [ ! -L "$CURSOR_RULE_TARGET" ] && [ ! -f "$CURSOR_RULE_TARGET" ]; then
+        ln -s "$CURSOR_RULE_SOURCE" "$CURSOR_RULE_TARGET"
+        echo "✓ Symlinked (global — @zenith works from any Cursor session)"
+    else
+        echo "✓ Cursor rule already installed"
+    fi
+fi
 
 # Write global config
 GLOBAL_CONFIG="$ZENITH_DIR/.global-config"
@@ -87,8 +103,15 @@ echo "====================="
 echo
 echo "Location:    $ZENITH_DIR"
 echo "Username:    $GITHUB_USERNAME"
-echo "Command:     /zenith <anything>"
+echo "Claude Code: /zenith <anything>"
+if [[ "${INSTALL_CURSOR:-n}" =~ ^[Yy]$ ]]; then
+    echo "Cursor:      @zenith <anything>"
+fi
 echo
-echo "Open Claude Code from inside any repo and run /zenith to get started."
+if [[ "${INSTALL_CURSOR:-n}" =~ ^[Yy]$ ]]; then
+    echo "Open Claude Code or Cursor from inside any repo to get started."
+else
+    echo "Open Claude Code from inside any repo and run /zenith to get started."
+fi
 echo "Zenith will configure itself for that repo on first use."
 echo

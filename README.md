@@ -109,6 +109,18 @@ It's especially useful for people who are strong in their domain — ML, data, d
 
 ## Install
 
+### Install as an agent skill (Claude Code, Codex CLI, Gemini CLI, Cursor)
+
+Zenith follows the open agent skills standard. Any compatible runtime can install it with one command:
+
+```bash
+git clone https://github.com/your-org/zenith ~/.agents/skills/zenith
+```
+
+The runtime reads `SKILL.md` from the cloned directory. No setup script required.
+
+---
+
 ### Step 1 — Install Zenith globally (once per machine)
 
 Run this from your terminal — anywhere:

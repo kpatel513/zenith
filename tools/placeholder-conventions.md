@@ -16,6 +16,8 @@ This document defines the canonical naming for all placeholders in commands, doc
 |-------------|---------|---------|-------|
 | `{base_branch}` | The main/master branch from config | `main`, `master` | Read from `.agent-config` |
 | `{current_branch}` | The branch currently checked out | `feature/auth` | From `git branch --show-current` |
+| `{parent_branch}` | Immediate parent in a stack (the branch this one was created from, if not `{base_branch}`) | `feature/auth` | Equals `{base_branch}` when not stacked; set via `git config branch.{name}.zenith-parent` |
+| `{parent_tip}` | Last commit hash of `{parent_branch}` at the time the stack was created | `a3f2c1b` | Stored in `git config branch.{name}.zenith-parent-tip`; used in `rebase --onto` after parent is merged |
 | `{branch}` | Generic branch reference or user input | `feature/new-feature` | Use when context is clear |
 | `{remote_branch}` | Branch name on remote | `origin/feature/auth` | Includes remote name |
 

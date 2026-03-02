@@ -109,20 +109,70 @@ config warning — project_folder does not exist on disk
 ```
 Continue — do not stop, but surface the warning before every operation.
 
+**Detect parent branch (stacked PR support):**
+
+```bash
+# CMD_GET_PARENT_BRANCH
+PARENT_BRANCH=$(git config branch.{current_branch}.zenith-parent 2>/dev/null)
+
+# If not stored locally, check GitHub PR base
+if [ -z "$PARENT_BRANCH" ]; then
+    PARENT_BRANCH=$(gh pr view {current_branch} --json baseRefName --jq '.baseRefName' 2>/dev/null)
+fi
+
+# Not stacked if parent equals base_branch or is empty
+if [ "$PARENT_BRANCH" = "{base_branch}" ] || [ -z "$PARENT_BRANCH" ]; then
+    PARENT_BRANCH="{base_branch}"
+fi
+```
+
+`{parent_branch}` is now resolved. When `{parent_branch}` = `{base_branch}`, the branch is not stacked — all operations behave as before. When `{parent_branch}` ≠ `{base_branch}`, the branch is stacked — use `{parent_branch}` in place of `{base_branch}` for syncing, commit counting, and PR base.
+
 ## Step 1b: Behind-Main Detection and Auto-Sync
 
 **Run this immediately after diagnostics, before situation detection or intent classification.**
 
-Handles all cases where the branch is behind main. Non-technical users won't know to ask for any of these — detect and respond automatically.
+Handles all cases where the branch is behind its parent (or main for non-stacked branches). Non-technical users won't know to ask for any of these — detect and respond automatically.
 
 ```bash
 git fetch origin
-git rev-list --count HEAD..origin/{base_branch}
+git rev-list --count HEAD..origin/{parent_branch}
 gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state merged --limit 1
 gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state closed --limit 1
+# If stacked: also check if parent was merged into base_branch
+[ "{parent_branch}" != "{base_branch}" ] && gh pr list --repo {github_org}/{github_repo} --head {parent_branch} --state merged --limit 1
 ```
 
-If **behind = 0**: skip this step entirely.
+If **behind = 0** AND parent branch was not merged: skip this step entirely.
+
+**Stacked-only: Tier 0 — Parent PR was merged**
+
+Condition: `{parent_branch}` ≠ `{base_branch}` AND a merged PR exists for `{parent_branch}`
+
+This fires before Tiers 1-3. The user's parent was merged; this branch now needs to be retargeted and rebased.
+
+Print:
+```
+parent PR merged — {parent_branch} landed in {base_branch}
+│ retargeting your branch: base changes from {parent_branch} → {base_branch}
+│ replaying your commits on top of {base_branch} (dropping {parent_branch}'s commits)
+│ your PR will be updated automatically
+
+Retarget and rebase now? [y/n]
+```
+
+If yes: execute INTENT_MERGE_COMPLETE retarget sequence (see handler below). Continue to Step 2 after completion.
+
+If no:
+```
+  ok  your branch still targets {parent_branch}
+  note: run /zenith I merged the PR when you're ready to retarget
+```
+Continue to Step 2.
+
+---
+
+If **behind = 0** (after Tier 0 check): skip Tiers 1-3 entirely.
 
 If **behind > 0**, classify into one of three tiers:
 
@@ -333,6 +383,7 @@ Map user's request to ONE intent. Use both request text AND situation to classif
 - `INTENT_MOVE_COMMITS` - committed to wrong branch, move commits, commits on wrong branch
 - `INTENT_UNSTASH` - unstash, restore my stash, get my changes back
 - `INTENT_FIX_CONFLICT` - PR has conflicts, merge conflict on GitHub, can't merge PR
+- `INTENT_STACK_STATUS` - show my stack, stack overview, where is my PR in the stack, how many levels deep
 - `INTENT_HELP` - help, what can you do, what commands exist
 - `INTENT_UNKNOWN` - cannot determine intent
 
@@ -369,6 +420,7 @@ clean up history          | Remove merge commits, replay your commits cleanly on
 move my commits           | Cherry-pick commits to correct branch and remove from this one
 unstash                   | Restore changes saved by a previous stash
 PR has conflicts          | Resolve merge conflict blocking your PR
+show my stack             | Show the full stack: each branch, its PR status, and CI state
 help                      | Show this table
 ```
 
@@ -435,6 +487,38 @@ Sanitize input:
 - Spaces → hyphens
 - Remove special chars except hyphens/underscores
 - Prefix with `feature/`
+
+**If currently on a feature branch** (not `{base_branch}`), ask before creating:
+
+```
+creating branch — you're on {current_branch}, not {base_branch}
+│ stack on {current_branch}: your new work builds directly on top of this branch
+│   → PR will target {current_branch}; merges after {current_branch} merges
+│ branch from {base_branch}: independent work, unrelated to {current_branch}
+│   → PR will target {base_branch} directly
+
+Stack on {current_branch} or branch from {base_branch}? [s/m]
+```
+
+**If stack (`s`):**
+
+```bash
+git checkout -b feature/{sanitized}
+git config branch.feature/{sanitized}.zenith-parent {current_branch}
+git config branch.feature/{sanitized}.zenith-parent-tip $(git rev-parse origin/{current_branch})
+git push -u origin feature/{sanitized}  # CMD_PUSH_SET_UPSTREAM
+```
+
+Print:
+```
+  ✓ branch  feature/{sanitized}
+  stacked   {current_branch} → feature/{sanitized}
+  folder    work inside {project_folder}/ only
+```
+
+Next: "next: your stacked branch is ready — start coding in {project_folder}/"
+
+**If branch from main (`m`) or currently on `{base_branch}`:**
 
 Print:
 ```
@@ -917,20 +1001,31 @@ Stop.
 Execute:
 ```bash
 git fetch origin                   # CMD_FETCH_ORIGIN
-git log HEAD..origin/{base_branch} --oneline --format="%h %s — %an %ar"
+git log HEAD..origin/{parent_branch} --oneline --format="%h %s — %an %ar"
 gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open --limit 1
 ```
 
 If no incoming commits:
 ```
-already up to date — {base_branch} has no new commits
+already up to date — {parent_branch} has no new commits
 │ your branch is in sync, nothing to do
 ```
+
+If stacked (`{parent_branch}` ≠ `{base_branch}`), also check if `{parent_branch}` itself is behind `{base_branch}`:
+```bash
+git rev-list --count origin/{parent_branch}..origin/{base_branch}
+```
+If parent is behind main, append:
+```
+│ note  {parent_branch} is {n} commits behind {base_branch}
+│       sync {parent_branch} first to propagate main changes up the stack
+```
+
 Stop.
 
 Print incoming commits as `│` lines:
 ```
-checking {base_branch} — {n} new commit(s) since your branch diverged
+checking {parent_branch} — {n} new commit(s) since your branch diverged
 │ {hash} {message} — {author} {time}
 │ {hash} {message} — {author} {time}
 ```
@@ -938,7 +1033,7 @@ checking {base_branch} — {n} new commit(s) since your branch diverged
 **Stale branch warning** — if behind > 20 commits:
 
 ```bash
-git log HEAD..origin/{base_branch} --oneline --format="%h %s" -- {project_folder}
+git log HEAD..origin/{parent_branch} --oneline --format="%h %s" -- {project_folder}
 ```
 
 Print:
@@ -967,7 +1062,7 @@ Sync now? [y/n]
 If **no open PR** (pre-review, history can be rewritten safely):
 ```
 syncing — no open PR, using rebase for clean history
-│ your {n} commit(s) will replay on top of the {n} new ones from {base_branch}
+│ your {n} commit(s) will replay on top of the {n} new ones from {parent_branch}
 │ no merge commit will be created
 
 Sync now? [y/n]
@@ -981,7 +1076,7 @@ Stop.
 
 **If open PR exists — execute merge:**
 ```bash
-git merge origin/{base_branch}
+git merge origin/{parent_branch}
 ```
 
 If conflicts: apply three-tier resolution (see tools/conflict-resolver.md), replacing abort/continue with:
@@ -993,7 +1088,7 @@ If conflicts: apply three-tier resolution (see tools/conflict-resolver.md), repl
 
 **If no open PR — execute rebase:**
 ```bash
-git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
+git rebase origin/{parent_branch}
 ```
 
 If conflicts: apply three-tier resolution (see tools/conflict-resolver.md):
@@ -1075,21 +1170,21 @@ Next: "next: run /zenith push when ready"
 Execute:
 ```bash
 git fetch origin                   # CMD_FETCH_ORIGIN
-git rev-list --count HEAD..origin/{base_branch}  # CMD_COMMITS_BEHIND
-git log HEAD..origin/{base_branch} --oneline --format="%h %s — %an %ar"
+git rev-list --count HEAD..origin/{parent_branch}  # CMD_COMMITS_BEHIND
+git log HEAD..origin/{parent_branch} --oneline --format="%h %s — %an %ar"
 ```
 
 If count = 0:
 ```
-checking distance — comparing your branch against {base_branch}
+checking distance — comparing your branch against {parent_branch}
 │ you are up to date, nothing to sync
 
-  ✓ up to date with {base_branch}
+  ✓ up to date with {parent_branch}
 ```
 
 If count > 0:
 ```
-checking distance — comparing your branch against {base_branch}
+checking distance — comparing your branch against {parent_branch}
 │ {hash} {message} — {author} {time}
 │ {hash} {message} — {author} {time}
 
@@ -1261,7 +1356,7 @@ git diff --cached --stat           # CMD_DIFF_CACHED_STAT
 
 Print:
 ```
-pushing — commit → sync with {base_branch} → push → open PR
+pushing — commit → sync with {parent_branch} → push → open PR
 │ {file}   +{n} -{n}
 │ {file}   +{n} -{n}
 │ all steps run automatically after you confirm
@@ -1297,24 +1392,24 @@ gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state ope
 
 Print:
 ```
-syncing — open PR exists, merging {base_branch} to preserve review history
+syncing — open PR exists, merging {parent_branch} to preserve review history
 │ rewriting history would invalidate reviewer comments
 ```
 
 ```bash
-git merge origin/{base_branch}     # preserves commit history, no force push needed
+git merge origin/{parent_branch}   # preserves commit history, no force push needed
 ```
 
 **If no open PR** — sync with rebase for clean history:
 
 Print:
 ```
-syncing — no open PR, rebasing onto {base_branch} for clean history
-│ {n} new commits on {base_branch} (or "main is up to date")
+syncing — no open PR, rebasing onto {parent_branch} for clean history
+│ {n} new commits on {parent_branch} (or "{parent_branch} is up to date")
 ```
 
 ```bash
-git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
+git rebase origin/{parent_branch}
 ```
 
 Print:
@@ -1340,15 +1435,15 @@ Ask: "Open as draft PR or ready for review? [d/r]"
 
 If draft:
 ```bash
-gh pr create --draft --base {base_branch} --head {current_branch} --title "{last_commit_message}" --body ""
+gh pr create --draft --base {parent_branch} --head {current_branch} --title "{last_commit_message}" --body ""
 ```
 
 Print:
 ```
 opening draft PR — CI will run, reviewers not notified yet
 │ branch   {current_branch}
-│ base     {base_branch}
-│ commits  {n} ahead of {base_branch}
+│ base     {parent_branch}
+│ commits  {n} ahead of {parent_branch}
 
   ✓ draft PR opened
 ```
@@ -1359,8 +1454,8 @@ If ready for review:
 
 Read commits to generate PR content:
 ```bash
-git log origin/{base_branch}..HEAD --format="%s" | head -1
-git log origin/{base_branch}..HEAD --reverse --format="- %s"
+git log origin/{parent_branch}..HEAD --format="%s" | head -1
+git log origin/{parent_branch}..HEAD --reverse --format="- %s"
 ```
 
 Print:
@@ -1369,7 +1464,15 @@ creating PR — {n} commit(s) ready for review
 │ title   {first_commit_subject}
 │ body
 │   {commit_list}
+```
 
+If stacked (`{parent_branch}` ≠ `{base_branch}`), add to the preview:
+```
+│ note    stacked PR — targets {parent_branch}, not {base_branch}
+│         this PR will merge after {parent_branch} merges
+```
+
+```
 Create this PR? [y/edit/n]
 ```
 
@@ -1377,7 +1480,7 @@ If n:
 ```
   PR not created
   create it manually at:
-  https://github.com/{github_org}/{github_repo}/compare/{base_branch}...{current_branch}?expand=1
+  https://github.com/{github_org}/{github_repo}/compare/{parent_branch}...{current_branch}?expand=1
 ```
 Stop.
 
@@ -1385,15 +1488,20 @@ If edit: Ask "Title?" (press Enter to keep current), then "Description?" (press 
 
 If y or after edit:
 ```bash
-gh pr create --base {base_branch} --head {current_branch} --title "{title}" --body "{body}"
+gh pr create --base {parent_branch} --head {current_branch} --title "{title}" --body "{body}"
 ```
 
 Print:
 ```
   ✓ PR       {pr_url}
   branch     {current_branch}
-  base       {base_branch}
-  commits    {n} ahead of {base_branch}
+  base       {parent_branch}
+  commits    {n} ahead of {parent_branch}
+```
+
+If stacked, add:
+```
+  stack      {base_branch} → {parent_branch} → {current_branch}
 ```
 
 Next: "next: when your PR is merged, run /zenith I merged the PR to sync up"
@@ -1410,7 +1518,98 @@ git rev-list --count HEAD..origin/{base_branch}  # CMD_COMMITS_BEHIND
 git rev-list --count origin/{base_branch}..HEAD
 ```
 
-If merged PR found OR (0 ahead AND behind > 0):
+**Stacked case: this branch's own PR was merged into its parent (not into base_branch)**
+
+If `{parent_branch}` ≠ `{base_branch}` AND merged PR found for `{current_branch}`:
+
+```bash
+git rev-list --count HEAD..origin/{parent_branch}
+```
+
+Print:
+```
+post-merge sync — your PR was merged into {parent_branch}
+│ rebasing onto {parent_branch} to bring {current_branch} forward
+```
+
+Execute:
+```bash
+git rebase origin/{parent_branch}
+git rev-list --count HEAD..origin/{parent_branch}
+git rev-list --count origin/{parent_branch}..HEAD
+```
+
+Print:
+```
+  ✓ synced   {current_branch}
+  behind     0 (relative to {parent_branch})
+  ahead      0
+  your branch is clean and in sync with {parent_branch}
+```
+
+Next: "next: start new work, or keep building on {current_branch}"
+Stop.
+
+---
+
+**Stacked case: parent PR was merged into base_branch**
+
+If `{parent_branch}` ≠ `{base_branch}` AND a merged PR exists for `{parent_branch}` into `{base_branch}`:
+
+Print:
+```
+parent PR merged — {parent_branch} landed in {base_branch}
+│ your branch still targets {parent_branch}, which no longer exists as a live branch
+│ retargeting: {parent_branch} → {base_branch}
+│ replaying your commits on top of {base_branch} (dropping {parent_branch}'s commits)
+│ your work is preserved — only the stack structure changes
+
+Retarget and rebase? [y/n]
+```
+
+If yes:
+
+```bash
+# Get parent tip for rebase --onto
+PARENT_TIP=$(git config branch.{current_branch}.zenith-parent-tip 2>/dev/null)
+
+# Fallback: use remote if still available
+if [ -z "$PARENT_TIP" ] && git ls-remote --heads origin {parent_branch} | grep -q .; then
+    PARENT_TIP=$(git rev-parse origin/{parent_branch})
+fi
+
+# Retarget this PR's base on GitHub
+PR_NUMBER=$(gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open --json number --jq '.[0].number' 2>/dev/null)
+[ -n "$PR_NUMBER" ] && gh pr edit "$PR_NUMBER" --base {base_branch}
+
+# Rebase: drop parent's commits, keep ours   # CMD_REBASE_ONTO_PARENT
+git rebase --onto origin/{base_branch} ${PARENT_TIP}
+
+git push origin {current_branch} --force-with-lease  # CMD_PUSH_FORCE_WITH_LEASE
+
+# Clear parent tracking — this branch is no longer stacked
+git config --unset branch.{current_branch}.zenith-parent
+git config --unset branch.{current_branch}.zenith-parent-tip
+```
+
+Print:
+```
+  ✓ retargeted  PR now targets {base_branch}
+  ✓ rebased     your commits are on top of {base_branch}
+  ✓ pushed      history updated on origin
+  stack         removed — {current_branch} is now a direct branch from {base_branch}
+```
+
+Next: "next: your PR is ready for review — CI will re-run on the rebased commits"
+Stop.
+
+If no, stop. User will retarget manually.
+
+---
+
+**Standard case: this branch's own PR was merged into base_branch**
+
+If merged PR found for `{current_branch}` into `{base_branch}` OR (0 ahead AND behind > 0):
 
 Print:
 ```
@@ -1563,22 +1762,28 @@ Execute:
 git fetch origin                   # CMD_FETCH_ORIGIN
 git branch --show-current          # CMD_CURRENT_BRANCH
 git status --short                 # CMD_STATUS_SHORT
-git rev-list --count HEAD..origin/{base_branch}  # CMD_COMMITS_BEHIND
-git rev-list --count origin/{base_branch}..HEAD
+git rev-list --count HEAD..origin/{parent_branch}  # CMD_COMMITS_BEHIND
+git rev-list --count origin/{parent_branch}..HEAD
 git diff --stat HEAD
 gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open --limit 1
 git stash list                     # CMD_STASH_LIST
+git config branch.{current_branch}.zenith-parent 2>/dev/null  # CMD_GET_PARENT_BRANCH
 ```
 
 Print:
 ```
 status — {current_branch}
-│ behind    {n} commits behind {base_branch}
-│ ahead     {n} commits ahead of {base_branch}
+│ behind    {n} commits behind {parent_branch}
+│ ahead     {n} commits ahead of {parent_branch}
 │ changes   {n} uncommitted files
 │ staged    {n} files staged
 │ stashes   {n} stashed entries
 │ PR        {pr_title} #{pr_number} ({pr_status})
+```
+
+If stacked (zenith-parent is set and not {base_branch}), add:
+```
+│ stack     {base_branch} → {parent_branch} → {current_branch}
 ```
 
 (or `│ PR        no open PR` if none)
@@ -1586,6 +1791,7 @@ status — {current_branch}
 If behind > 0: `  → run /zenith sync to catch up`
 If uncommitted changes: `  → run /zenith save to commit, or /zenith what did I change to review`
 If open PR: `  → run /zenith CI failed to check CI status`
+If stacked: `  → run /zenith show my stack for full stack overview`
 If everything clean and ahead > 0: `  → run /zenith push to open a PR`
 If everything clean and ahead = 0: `  → nothing to do — branch is in sync`
 
@@ -1597,15 +1803,15 @@ Same as INTENT_PUSH but always opens as draft. Skips the [d/r] question.
 
 Execute the full INTENT_PUSH flow (commit if needed, sync, push), then:
 ```bash
-gh pr create --draft --base {base_branch} --head {current_branch} --title "{last_commit_message}" --body ""
+gh pr create --draft --base {parent_branch} --head {current_branch} --title "{last_commit_message}" --body ""
 ```
 
 Print:
 ```
 opening draft PR — CI will run, reviewers not notified yet
 │ branch   {current_branch}
-│ base     {base_branch}
-│ commits  {n} ahead of {base_branch}
+│ base     {parent_branch}
+│ commits  {n} ahead of {parent_branch}
 
   ✓ draft PR opened
 ```
@@ -1733,23 +1939,23 @@ Stop.
 
 Execute:
 ```bash
-git log origin/{base_branch}..HEAD --merges --oneline
-git log origin/{base_branch}..HEAD --no-merges --oneline
+git log origin/{parent_branch}..HEAD --merges --oneline
+git log origin/{parent_branch}..HEAD --no-merges --oneline
 ```
 
 If no merge commits found:
 ```
-history is clean — no merge commits found between {current_branch} and {base_branch}
+history is clean — no merge commits found between {current_branch} and {parent_branch}
 │ your branch already has a linear history
 ```
 Stop.
 
 Print:
 ```
-tangled history — your branch contains merge commits from {base_branch}
+tangled history — your branch contains merge commits from {parent_branch}
 │ these make your PR diff show unrelated files that are already merged
 │ merge commits (will be removed):
-│   {hash} Merge branch 'main' into feature/...
+│   {hash} Merge branch '{parent_branch}' into feature/...
 │
 │ your commits (will be kept):
 │   {hash} {message}
@@ -1769,7 +1975,7 @@ Stop.
 
 Execute:
 ```bash
-git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
+git rebase origin/{parent_branch}    # CMD_REBASE_ONTO_BASE
 ```
 
 If conflicts: apply three-tier conflict resolution (same rules as INTENT_SYNC — see INTENT_SYNC conflict rules above):
@@ -1793,7 +1999,7 @@ Print:
   ✓ cleaned  {current_branch}
   removed    {n} merge commit(s)
   kept       {n} your commit(s)
-  ahead      {n} commits ahead of {base_branch}
+  ahead      {n} commits ahead of {parent_branch}
 ```
 
 Next: "next: run /zenith push to push your clean history"
@@ -1818,12 +2024,12 @@ Stop.
 
 Show commits available to move:
 ```bash
-git log origin/{base_branch}..HEAD --oneline --reverse --format="%h %s"
+git log origin/{parent_branch}..HEAD --oneline --reverse --format="%h %s"
 ```
 
 If no commits found:
 ```
-nothing to move — no commits on this branch ahead of {base_branch}
+nothing to move — no commits on this branch ahead of {parent_branch}
 │ make some commits first, then run /zenith move my commits
 ```
 Stop.
@@ -2027,6 +2233,82 @@ Print:
 ```
 
 Next: "next: check your PR on GitHub — CI will re-run on the new commit"
+
+### INTENT_STACK_STATUS
+
+Execute:
+```bash
+git fetch origin                   # CMD_FETCH_ORIGIN
+git branch --show-current          # CMD_CURRENT_BRANCH
+```
+
+Walk the stack upward from {current_branch} using stored config:
+```bash
+# Build ordered stack: oldest ancestor first, current branch last
+STACK=("{current_branch}")
+BRANCH="{current_branch}"
+while true; do
+    PARENT=$(git config branch."$BRANCH".zenith-parent 2>/dev/null)
+    if [ -z "$PARENT" ] || [ "$PARENT" = "{base_branch}" ]; then
+        break
+    fi
+    STACK=("$PARENT" "${STACK[@]}")
+    BRANCH="$PARENT"
+done
+```
+
+If no zenith-parent config found (stack has only one entry):
+```
+not in a stack — {current_branch} is a regular branch
+│ stacks start when you run /zenith start new work while already on a feature branch
+│ that creates a branch whose PR targets your feature branch instead of {base_branch}
+│ use stacks when change B depends on change A and both need separate PRs
+```
+Stop.
+
+For each branch in STACK (bottom-most ancestor first), collect:
+```bash
+# For each {stack_branch} in STACK:
+PR_OPEN=$(gh pr list --repo {github_org}/{github_repo} --head {stack_branch} --state open --json number,isDraft,url --jq '.[0]' 2>/dev/null)
+PR_MERGED=$(gh pr list --repo {github_org}/{github_repo} --head {stack_branch} --state merged --json number,url --jq '.[0]' 2>/dev/null)
+STACK_PARENT=$(git config branch.{stack_branch}.zenith-parent 2>/dev/null || echo "{base_branch}")
+COMMITS_AHEAD=$(git rev-list --count origin/"$STACK_PARENT"..origin/{stack_branch} 2>/dev/null || git rev-list --count origin/"$STACK_PARENT"..{stack_branch} 2>/dev/null || echo "?")
+CI_STATUS=$(gh pr view {stack_branch} --repo {github_org}/{github_repo} --json statusCheckRollup --jq '.statusCheckRollup // [] | map(.conclusion) | if any(. == "FAILURE") then "CI ✗" elif any(. == null) then "CI …" elif length == 0 then "" else "CI ✓" end' 2>/dev/null)
+```
+
+Print the stack from base → tip (reading order matches merge order):
+```
+stack — {n} branches deep on {base_branch}
+
+│ {base_branch} (base)
+│   ↓
+│ {branch_1}   PR #{n} open     CI ✓   {n} commits ahead of {base_branch}
+│   ↓
+│ {branch_2}   PR #{n} draft    CI …   {n} commits ahead of {branch_1}   ← you are here
+```
+
+Status labels per branch:
+- `open` — PR is open and ready for review
+- `draft` — PR is open as a draft (CI runs, reviewers not notified)
+- `merged` — PR was merged; stack may need retargeting
+- `no PR` — branch not yet pushed or PR not opened
+
+After the table, if any branch in the stack shows `merged`:
+```
+  → merged branch detected — run /zenith I merged the PR to retarget the stack
+```
+
+If any branch has `no PR`:
+```
+  → {stack_branch} has no PR — run /zenith push on that branch to open one
+```
+
+If all branches are open and up to date:
+```
+  ✓ stack is clean — all branches have open PRs
+```
+
+Next: guidance based on the dominant issue in the stack (merged > no PR > CI failing > clean)
 
 ## Step 5: After Every Operation
 

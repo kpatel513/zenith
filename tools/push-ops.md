@@ -8,8 +8,10 @@ Precise git command sequences for pushing changes and creating pull requests.
 
 Used in: INTENT_PUSH
 
-Complete sequence from uncommitted changes to PR. **Order matters**: commit must happen
-before rebase, because rebasing with staged changes fails.
+Complete sequence from uncommitted changes to PR. Uses {parent_branch} — equals {base_branch} for non-stacked branches; equals the parent feature branch for stacked branches.
+
+**Operation order is critical:** stage → commit → fetch → check PR → sync → push → create PR.
+Rebasing with staged or uncommitted changes fails.
 
 ```bash
 # 1. Run diagnostics
@@ -28,32 +30,42 @@ CURRENT=$(git branch --show-current)
 # 3. Run contamination check (see contamination.md)
 # If files outside project_folder: ask include/exclude
 
-# 4. Stage files
+# 4. Stage files (BEFORE fetch/rebase)
 git add {project_folder}/          # CMD_STAGE_FILE (or all files if user chose include)
 
 # 5. Show what will be committed
 git diff --cached --stat           # CMD_DIFF_CACHED_STAT
 
-# 6. Get commit message and commit
+# 6. Commit (BEFORE rebase — rebase on staged/uncommitted changes fails)
 git commit -m "{message}"          # CMD_COMMIT_WITH_MESSAGE
 
-# 7. Fetch latest and check for open PR
+# 7. Fetch latest
 git fetch origin                   # CMD_FETCH_ORIGIN
-# gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open
 
-# 8. Sync with base branch
-# If open PR exists: merge (preserves review comments, avoids force push)
-#   git merge origin/{base_branch}
+# 8. Check for open PR to choose sync strategy
+gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open --limit 1
+
+# 9. Sync with parent branch
+# If open PR exists: merge (preserves reviewer comments)
+git merge origin/{parent_branch}
 # If no open PR: rebase (clean linear history)
-#   git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
+git rebase origin/{parent_branch}  # CMD_REBASE_ONTO_BASE
+
 # Handle conflicts if any (see conflict-resolver.md)
 
-# 9. Push with upstream tracking
+# 10. Push with upstream tracking
 git push -u origin {current_branch}  # CMD_PUSH_SET_UPSTREAM
 
-# 10. Create PR via GitHub CLI
-# gh pr create --base {base_branch} --head {current_branch} --title "{title}" --body "{body}"
-# (or --draft for draft PRs)
+# 11. Create PR targeting parent branch
+gh pr create --base {parent_branch} --head {current_branch} --title "{title}" --body "{body}"
+# or for draft:
+gh pr create --draft --base {parent_branch} --head {current_branch} --title "{last_commit_message}" --body ""
+```
+
+**Stacked PR output example:**
+```
+stack:   {base_branch} → {parent_branch} → {current_branch}
+PR:      https://github.com/{org}/{repo}/pull/{n}
 ```
 
 ## Push Only (No New Commit)

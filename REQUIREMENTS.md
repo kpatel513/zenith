@@ -230,6 +230,72 @@
 - Display table of natural language phrases and corresponding actions
 - No technical jargon
 
+### FR-22: Status (INTENT_STATUS)
+- Fetch latest from remote
+- Show branch name, commits ahead/behind parent branch, uncommitted files, staged files, stash count
+- Show open PR if one exists
+- Show stack info if on a stacked branch
+- Give one-line next-action guidance based on dominant issue
+
+### FR-23: Draft PR (INTENT_DRAFT_PR)
+- Same flow as INTENT_PUSH but always opens PR as draft
+- Skips the draft/ready question
+- CI runs, reviewers not notified
+
+### FR-24: Fix CI (INTENT_FIX_CI)
+- Check for open PR on current branch
+- List last 5 CI runs with status
+- Find most recent failed run and show log output
+- Link to PR
+
+### FR-25: Cleanup Branches (INTENT_CLEANUP_BRANCHES)
+- Fetch and prune remote refs
+- Find merged branches via git ancestry (regular merges) and GitHub PR history (squash merges)
+- Filter to branches owned by current user
+- Show numbered list with tip hash and age
+- Delete selected branches locally and remotely (silently ignore remote failures)
+
+### FR-26: Clean History (INTENT_CLEAN_HISTORY)
+- Block if uncommitted changes
+- Detect merge commits between current branch and parent branch
+- Show merge commits to remove and own commits to keep
+- Rebase onto parent branch to remove merge commits
+- Force-push if open PR exists
+
+### FR-27: Move Commits (INTENT_MOVE_COMMITS)
+- Block if uncommitted changes or on base branch
+- Show commits on current branch ahead of parent branch
+- Ask which commits to move and which target branch
+- Cherry-pick selected commits onto target branch
+- Remove selected commits from source branch
+
+### FR-28: Unstash (INTENT_UNSTASH)
+- List all stashed entries
+- If one stash: use automatically; if multiple: prompt for selection
+- Pop selected stash and show restored files
+
+### FR-29: Fix Conflict (INTENT_FIX_CONFLICT)
+- Block if no open PR
+- Block if uncommitted changes
+- Merge base branch locally to surface conflicts
+- Apply three-tier conflict resolution (see FR-12)
+- Push resolved merge commit to unblock PR
+
+### FR-30: Merge Complete (INTENT_MERGE_COMPLETE)
+- Detect whether own PR or parent PR was merged
+- If stacked and own PR merged into parent: rebase onto parent
+- If stacked and parent PR merged into base: retarget PR, rebase --onto, unset parent config
+- If standard: rebase onto base branch and confirm sync
+
+### FR-31: Stacked PRs (INTENT_STACK_STATUS + cross-intent support)
+- Allow creating a branch that targets another feature branch instead of base branch
+- Store parent branch in git config (zenith-parent) at branch creation
+- Store parent tip hash in git config (zenith-parent-tip) for rebase --onto after parent deletion
+- All operations (push, sync, how far behind, clean history, move commits) use parent branch as comparison base
+- INTENT_STACK_STATUS: walk the full stack chain, show each branch with PR status, CI status, and commit count
+- INTENT_MERGE_COMPLETE: handle three cases — own PR merged, parent PR merged, standard
+- PR retargeting: update PR base with gh pr edit --base after parent is merged
+
 ## Non-Functional Requirements
 
 ### NFR-1: Single Entry Point

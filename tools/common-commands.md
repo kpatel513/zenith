@@ -154,6 +154,31 @@ git rebase origin/{base_branch}
 **Output:** Rebase progress, potential conflicts
 **Used for:** Updating feature branch with latest base changes
 
+### CMD_REBASE_ONTO_PARENT
+```bash
+git rebase --onto origin/{base_branch} {parent_tip}
+```
+**Purpose:** Retarget a stacked branch onto base_branch after the parent branch was merged
+**Output:** Rebase progress, potential conflicts
+**Used for:** INTENT_MERGE_COMPLETE when parent PR was merged; drops parent's commits from the branch, keeps only the branch's own commits on top of base_branch
+**Note:** `{parent_tip}` is the last commit of the parent branch before it was merged. Read from `git config branch.{current_branch}.zenith-parent-tip`. If parent remote still exists, `origin/{parent_branch}` can be used instead.
+
+### CMD_GET_PARENT_BRANCH
+```bash
+git config branch.{current_branch}.zenith-parent 2>/dev/null
+```
+**Purpose:** Get the stored parent branch name for a stacked branch
+**Output:** Parent branch name, or empty if not set
+**Used for:** Stack detection in Step 1
+
+### CMD_GET_PARENT_TIP
+```bash
+git config branch.{current_branch}.zenith-parent-tip 2>/dev/null
+```
+**Purpose:** Get the stored tip hash of the parent branch at stack creation time
+**Output:** Commit hash (7+ chars), or empty if not set
+**Used for:** `git rebase --onto` when parent branch no longer exists on remote
+
 ---
 
 ## Staging Commands

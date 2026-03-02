@@ -60,7 +60,7 @@ if [ -L "$GLOBAL_SYMLINK" ] || [ -f "$GLOBAL_SYMLINK" ]; then
     rm -f "$GLOBAL_SYMLINK"
 fi
 echo "Creating global symlink to zenith.md..."
-ln -s "$ZENITH_DIR/.claude/commands/zenith.md" "$GLOBAL_SYMLINK"
+ln -s "$ZENITH_DIR/adapters/claude-command.md" "$GLOBAL_SYMLINK"
 echo "✓ Symlinked (global — /zenith works from any directory)"
 
 # Install Cursor rule (global, opt-in)

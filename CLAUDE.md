@@ -4,7 +4,7 @@
 
 Zenith is a **prompt-only project**. There is no build step, no runtime, no server, no package manager, no executable code. Every file is either a markdown specification or a bash installer script.
 
-The canonical skill definition lives in `SKILL.md` at the repo root. `.claude/commands/zenith.md` is a thin adapter that reads `SKILL.md` and delegates to it — this is what makes `/zenith` work in Claude Code. `.cursor/rules/zenith.mdc` does the same for Cursor. The `references/` files are specification documents that `SKILL.md` reads and follows during execution.
+The canonical skill definition lives in `SKILL.md` at the repo root. `adapters/claude-command.md` is a thin adapter that reads `SKILL.md` and delegates to it — `setup.sh` symlinks this to `~/.claude/commands/zenith.md`, which is what makes `/zenith` work in Claude Code. `.cursor/rules/zenith.mdc` does the same for Cursor. The `references/` files are specification documents that `SKILL.md` reads and follows during execution.
 
 **Deployment is immediate and live.** Edits to `zenith.md` on `main` go out to all users on their next cron pull. There is no staging environment. Treat every change like a production deploy.
 
@@ -14,7 +14,7 @@ The canonical skill definition lives in `SKILL.md` at the repo root. `.claude/co
 
 ```
 SKILL.md                              — Canonical skill definition. The file all runtimes execute.
-.claude/commands/zenith.md            — Claude Code adapter. Thin wrapper that reads SKILL.md.
+adapters/claude-command.md            — Claude Code adapter. Symlinked to ~/.claude/commands/zenith.md by setup.sh.
 .cursor/rules/zenith.mdc              — Cursor adapter. Thin wrapper that reads SKILL.md.
 references/safety.md                  — Non-negotiable safety rules.
 references/contamination.md           — Cross-folder contamination detection logic.

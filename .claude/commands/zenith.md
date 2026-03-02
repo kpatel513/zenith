@@ -246,6 +246,59 @@ Examples:
 - "detected: you have 3 files staged and 2 unstaged"
 - "detected: clean repo on main, ready to start new work"
 
+**S7/S8/S9 — stop and recover before intent classification:**
+
+If **S7** (detached HEAD — `git branch --show-current` returned empty):
+```
+detached HEAD — you are not on any branch
+│ this usually happens after checking out a specific commit or running git bisect
+│ any commits you make here are not on a branch and will be hard to find later
+
+To recover, choose one:
+  git switch -                       — return to the branch you were on before
+  git checkout {base_branch}         — switch to base branch
+  git checkout -b feature/my-work    — save your current position to a new branch first
+```
+Stop. Do not proceed to intent classification.
+
+---
+
+If **S8** (mid-rebase — `git status` output contains "rebase in progress"):
+```
+rebase in progress — a previous sync was interrupted
+│ git is paused, waiting for you to resolve conflicts and continue
+│ other Zenith operations cannot run until this is resolved
+
+To resolve:
+  1. Fix conflicts in any files shown as conflicted above
+  2. git add {file}                  — mark each conflict as resolved
+  3. git rebase --continue           — resume and finish the rebase
+
+To cancel instead:
+  git rebase --abort                 — undo the sync, return to your branch as it was
+```
+Stop. Do not proceed to intent classification.
+
+---
+
+If **S9** (mid-merge — `git status` output contains "merge in progress"):
+```
+merge in progress — a previous operation was interrupted
+│ git is waiting for you to resolve conflicts and complete the merge
+│ other Zenith operations cannot run until this is resolved
+
+To resolve:
+  1. Fix conflicts in any files shown as conflicted above
+  2. git add {file}                  — mark each conflict as resolved
+  3. git commit                      — complete the merge
+
+To cancel instead:
+  git merge --abort                  — undo the merge, return to your branch as it was
+```
+Stop. Do not proceed to intent classification.
+
+---
+
 ## Step 3: Intent Classification
 
 Map user's request to ONE intent. Use both request text AND situation to classify.

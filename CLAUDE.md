@@ -14,6 +14,7 @@ The `/zenith` slash command is defined entirely in `.claude/commands/zenith.md`.
 
 ```
 .claude/commands/zenith.md        — The slash command. The only file Claude executes.
+.cursor/rules/zenith.mdc          — Cursor entry point. Thin adapter that delegates to zenith.md.
 tools/safety.md                   — Non-negotiable safety rules.
 tools/contamination.md            — Cross-folder contamination detection logic.
 tools/conflict-resolver.md        — Three-tier conflict resolution rules.

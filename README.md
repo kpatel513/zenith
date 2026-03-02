@@ -98,10 +98,11 @@ It's especially useful for people who are strong in their domain — ML, data, d
 
 ## Before you install
 
-- [Claude Code](https://claude.ai/code) installed and working — run `claude --version` to check
 - git 2.23 or later — run `git --version` to check
 - A GitHub repo you have push access to
 - macOS or Linux
+- [Claude Code](https://claude.ai/code) — if using `/zenith` in Claude Code
+- [Cursor](https://cursor.com) — if using `@zenith` in Cursor (any model works)
 
 ---
 
@@ -115,13 +116,14 @@ Run this from your terminal — anywhere:
 curl -fsSL https://raw.githubusercontent.com/kpatel513/zenith/main/scripts/setup.sh | bash
 ```
 
-This installs Zenith to `~/.zenith`, makes `/zenith` available in every Claude Code session on your machine, and asks one question:
+This installs Zenith to `~/.zenith` and asks two questions:
 
 ```
-GitHub username: [your github username]
+GitHub username:          [your github username]
+Install Cursor rule? [y/N]: [y if you use Cursor, N otherwise]
 ```
 
-That's it. Zenith is installed globally. You don't configure repos here — that happens automatically the first time you use `/zenith` in each repo.
+That's it. Zenith is installed globally. You don't configure repos here — that happens automatically the first time you use `/zenith` or `@zenith` in each repo.
 
 ---
 
@@ -172,10 +174,66 @@ You'll see a table of everything Zenith can do.
 
 - Installs Zenith to `~/.zenith` on your machine
 - Creates `~/.claude/commands/zenith.md` — makes `/zenith` available in every Claude Code session, regardless of which directory you open it from
+- Creates `~/.cursor/rules/zenith.mdc` (if you opt in) — makes `@zenith` available in every Cursor session
 - Writes `~/.zenith/.global-config` with your GitHub username — pre-fills it for every repo you configure
 - Installs a daily background update so you always have the latest version
 
 **New machine or reinstalling?** The setup script is safe to re-run. It won't overwrite anything or create duplicates. To change your username after setup, edit `~/.zenith/.global-config` directly.
+
+---
+
+## Using Zenith in Cursor
+
+### First-time install
+
+Run the same `setup.sh` installer and answer **y** to the Cursor question. That creates `~/.cursor/rules/zenith.mdc`, which makes `@zenith` available in every Cursor session on your machine.
+
+### Already have Zenith installed?
+
+Setup won't re-run if Zenith is already installed. Add Cursor support with one command:
+
+```bash
+mkdir -p ~/.cursor/rules && ln -s ~/.zenith/.cursor/rules/zenith.mdc ~/.cursor/rules/zenith.mdc
+```
+
+### How to invoke
+
+Open Cursor's **Chat** or **Composer** panel, type `@zenith` followed by your request, and press Enter:
+
+```
+@zenith push my changes
+@zenith start new feature
+@zenith sync with main
+@zenith help
+```
+
+Cursor will show a dropdown when you type `@` — select **zenith** from the list, then add your request. The same phrases from the "What you can say" table below all work.
+
+### First use in a repo
+
+The first time you run `@zenith` in a repo that hasn't been configured, Zenith walks you through the same 4-question setup as Claude Code:
+
+```
+first-time setup — no config found for this repo
+│ detected: /Users/alice/code/company-repo
+│ answering 4 questions configures Zenith for this repo permanently
+
+Your project folder (or . for whole repo): team-ml/recommendations
+GitHub organization:                       acme-corp
+GitHub repository:                         company-repo
+Base branch [main]:                        main
+```
+
+If you've already configured the repo via Claude Code, `@zenith` picks up the same `.agent-config` — no duplicate setup.
+
+### Model compatibility
+
+**Claude Code is not required.** Zenith works with any model available in Cursor — Claude, GPT-4o, Gemini, or Cursor's built-in model.
+
+> If your repo's `.gitignore` excludes `.cursor/`, add an exception so teammates who use Cursor can get the rule:
+> ```
+> !.cursor/rules/zenith.mdc
+> ```
 
 ---
 
@@ -260,6 +318,13 @@ rm /path/to/repo/.agent-config
 
 **`/zenith` not recognized in Claude Code**
 Run `ls ~/.claude/commands/zenith.md` to check if the global symlink exists. If it's missing, re-run the install command.
+
+**`@zenith` not appearing in Cursor**
+Run `ls ~/.cursor/rules/zenith.mdc` to check if the rule is installed. If it's missing, run:
+```bash
+mkdir -p ~/.cursor/rules && ln -s ~/.zenith/.cursor/rules/zenith.mdc ~/.cursor/rules/zenith.mdc
+```
+Then open Cursor Settings → Rules and confirm `zenith` appears with `alwaysApply: false`.
 
 **First-time setup not appearing**
 Make sure you're opening Claude Code from inside a git repository. Zenith detects the repo automatically — it won't run if there's no `.git/` folder in the tree.

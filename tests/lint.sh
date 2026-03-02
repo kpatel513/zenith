@@ -166,6 +166,33 @@ for file in "${TOOLS_WITH_CMDS[@]}"; do
 done
 
 # ---------------------------------------------------------------------------
+# Check 6: .cursor/rules/zenith.mdc exists and has required frontmatter
+# ---------------------------------------------------------------------------
+
+echo
+echo "check: cursor rule"
+
+CURSOR_RULE="$REPO_ROOT/.cursor/rules/zenith.mdc"
+
+if [ ! -f "$CURSOR_RULE" ]; then
+    fail ".cursor/rules/zenith.mdc does not exist"
+else
+    pass ".cursor/rules/zenith.mdc exists"
+
+    if grep -q "^alwaysApply:" "$CURSOR_RULE"; then
+        pass "zenith.mdc has alwaysApply field"
+    else
+        fail "zenith.mdc missing alwaysApply field in frontmatter"
+    fi
+
+    if grep -q "^description:" "$CURSOR_RULE"; then
+        pass "zenith.mdc has description field"
+    else
+        fail "zenith.mdc missing description field in frontmatter"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 # Results
 # ---------------------------------------------------------------------------
 

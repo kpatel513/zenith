@@ -99,6 +99,7 @@ It's especially useful for people who are strong in their domain — ML, data, d
 ## Before you install
 
 - git 2.23 or later — run `git --version` to check
+- [GitHub CLI (gh)](https://cli.github.com) — run `gh --version` to check; install with `brew install gh` then `gh auth login`
 - A GitHub repo you have push access to
 - macOS or Linux
 - [Claude Code](https://claude.ai/code) — if using `/zenith` in Claude Code

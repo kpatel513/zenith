@@ -8,7 +8,8 @@ Precise git command sequences for pushing changes and creating pull requests.
 
 Used in: INTENT_PUSH
 
-Complete sequence from uncommitted changes to PR:
+Complete sequence from uncommitted changes to PR. **Order matters**: commit must happen
+before rebase, because rebasing with staged changes fails.
 
 ```bash
 # 1. Run diagnostics
@@ -21,38 +22,43 @@ CURRENT=$(git branch --show-current)
 # If on base_branch: STOP
 # Error: "You are on {base_branch}. Create a feature branch first."
 
-# 3. Run contamination check
-# (see contamination.md)
+# If nothing staged and no unpushed commits: STOP
+# Error: "Nothing to push."
 
+# 3. Run contamination check (see contamination.md)
 # If files outside project_folder: ask include/exclude
 
-# 4. Fetch latest
-git fetch origin                   # CMD_FETCH_ORIGIN
-
-# 5. Sync with base branch (rebase)
-git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
-
-# Handle conflicts if any (see conflict-resolver.md)
-
-# 6. Stage files
+# 4. Stage files
 git add {project_folder}/          # CMD_STAGE_FILE (or all files if user chose include)
 
-# 7. Show what will be committed
+# 5. Show what will be committed
 git diff --cached --stat           # CMD_DIFF_CACHED_STAT
 
-# 8. Commit
+# 6. Get commit message and commit
 git commit -m "{message}"          # CMD_COMMIT_WITH_MESSAGE
+
+# 7. Fetch latest and check for open PR
+git fetch origin                   # CMD_FETCH_ORIGIN
+# gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open
+
+# 8. Sync with base branch
+# If open PR exists: merge (preserves review comments, avoids force push)
+#   git merge origin/{base_branch}
+# If no open PR: rebase (clean linear history)
+#   git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
+# Handle conflicts if any (see conflict-resolver.md)
 
 # 9. Push with upstream tracking
 git push -u origin {current_branch}  # CMD_PUSH_SET_UPSTREAM
 
-# 10. Show PR URL
-echo "PR: https://github.com/{org}/{repo}/compare/{base_branch}...{current_branch}?expand=1"
+# 10. Create PR via GitHub CLI
+# gh pr create --base {base_branch} --head {current_branch} --title "{title}" --body "{body}"
+# (or --draft for draft PRs)
 ```
 
 ## Push Only (No New Commit)
 
-When changes are already committed:
+When changes are already committed (no staging/commit step needed):
 
 ```bash
 # 1. Validate branch
@@ -62,14 +68,19 @@ if [ "$CURRENT" = "{base_branch}" ]; then
     exit 1
 fi
 
-# 2. Fetch and sync
+# 2. Fetch and check PR state
 git fetch origin                   # CMD_FETCH_ORIGIN
-git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
+# gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open
 
-# 3. Push
+# 3. Sync with base branch
+# If open PR exists: git merge origin/{base_branch}
+# If no open PR:     git rebase origin/{base_branch}    # CMD_REBASE_ONTO_BASE
+
+# 4. Push
 git push -u origin {current_branch}  # CMD_PUSH_SET_UPSTREAM
 
-# 4. Show PR URL
+# 5. Create or update PR via GitHub CLI
+# gh pr create --base {base_branch} --head {current_branch} --title "{title}" --body "{body}"
 ```
 
 ## Update Existing PR

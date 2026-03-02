@@ -134,13 +134,18 @@
 
 ### FR-18: Push (INTENT_PUSH)
 - Block if on base branch
-- Block if nothing to push
+- Block if nothing to push (no uncommitted changes and no unpushed commits)
 - Run contamination check
-- Prompt for commit message if uncommitted changes
-- Fetch and rebase onto base branch
-- Stage and commit if needed
+- Prompt for commit message if uncommitted changes exist
+- Stage files (scoped to project_folder, or all if user chose include)
+- Show staged diff and confirm before committing
+- Commit
+- Fetch latest
+- Check for open PR on this branch — determines rebase vs merge strategy
+- If open PR exists: merge origin/{base_branch} (preserves review comments, avoids force push)
+- If no open PR: rebase onto origin/{base_branch} (clean linear history)
 - Push with upstream tracking
-- Display PR URL
+- Create PR via `gh pr create` (or mark existing draft as ready for review)
 
 ### FR-19: Fix Push (INTENT_FIX_PUSH)
 - Run diagnostics
@@ -159,7 +164,69 @@
 - Push to existing branch
 - Display PR URL
 
-### FR-21: Help (INTENT_HELP)
+### FR-21: Status (INTENT_STATUS)
+- Fetch latest
+- Display current branch, how far ahead/behind base branch, uncommitted changes count, staged file count, stash count, and open PR status in one view
+- Suggest the most relevant next action based on current state
+
+### FR-22: Draft PR (INTENT_DRAFT_PR)
+- Same flow as FR-18 (Push) but always opens PR as draft
+- Draft PR starts CI without notifying reviewers
+- After push, run `gh pr create --draft`
+
+### FR-23: Fix CI (INTENT_FIX_CI)
+- Require open PR on current branch
+- Fetch recent CI run list via `gh run list`
+- Find most recent failed run and show failed step output via `gh run view --log-failed`
+- Link to PR and failed run on GitHub
+
+### FR-24: Clean Up Branches (INTENT_CLEANUP_BRANCHES)
+- Fetch and prune remote refs
+- Find merged branches via git ancestry (`git branch --merged`) union GitHub PR history (`gh pr list --state merged`)
+- Filter to branches owned by current user
+- Show list with last commit hash before deleting (for recoverability)
+- Confirm before deleting; support selecting a subset
+- Delete local branch with `-D`; attempt remote delete (silently skip if already deleted by GitHub)
+
+### FR-25: Clean History (INTENT_CLEAN_HISTORY)
+- Block if uncommitted changes
+- Detect merge commits between current branch and base branch (`git log --merges`)
+- If none: report history is already clean
+- Show merge commits that will be removed and user commits that will be kept
+- Rebase onto base branch to remove merge commits
+- Apply three-tier conflict resolution
+- Force-push with `--force-with-lease` if open PR exists
+
+### FR-26: Move Commits (INTENT_MOVE_COMMITS)
+- Block if uncommitted changes
+- Block if on base branch
+- Show commits ahead of base branch
+- Prompt for which commits to move and target branch name
+- Cherry-pick selected commits onto target branch (new or existing)
+- Apply three-tier conflict resolution during cherry-pick
+- Offer to remove commits from source branch after moving
+
+### FR-27: Unstash (INTENT_UNSTASH)
+- List all stashes
+- If none: report no stashes
+- If one: use it automatically
+- If multiple: show numbered list, prompt for selection
+- Restore selected stash via `git stash pop`
+- Display files restored
+
+### FR-28: Fix Conflict (INTENT_FIX_CONFLICT)
+- Require open PR on current branch
+- Block if uncommitted changes
+- Merge base branch locally to surface conflicts
+- Apply three-tier conflict resolution (same rules as FR-12)
+- Push resolved state to update PR automatically
+
+### FR-29: Merge Complete (INTENT_MERGE_COMPLETE)
+- Detect merged PR for current branch via `gh pr list --state merged`
+- Rebase local branch onto base branch to incorporate the merge commit
+- Report 0 ahead / 0 behind when done
+
+### FR-30: Help (INTENT_HELP)
 - Display table of natural language phrases and corresponding actions
 - No technical jargon
 
@@ -199,6 +266,7 @@ All git command failures must show exact error output to user.
 
 - **Claude Code**: Runtime environment for slash command execution
 - **git**: Version 2.23+ (for git restore command)
+- **gh (GitHub CLI)**: For PR creation, PR listing, CI status checks (`gh pr create`, `gh pr list`, `gh run list`). Must be authenticated via `gh auth login`.
 - **bash**: Shell environment for script execution
 - **cron**: For automatic update scheduling
 - **GitHub**: Remote repository hosting

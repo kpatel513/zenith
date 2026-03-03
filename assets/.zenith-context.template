@@ -1,0 +1,39 @@
+# .zenith-context
+# Team review context for Zenith PR reviews.
+# Commit this file to the repository root as .zenith-context (no .template extension).
+# Update it after every incident or architecture decision.
+# Zenith reads this file during every PR review — more detail = better findings.
+# Lines starting with # are comments and are ignored.
+
+[operational]
+# Performance targets, connection limits, and capacity constraints.
+# Zenith uses these to evaluate whether a PR could violate operational bounds.
+# Format: free text, one constraint per line.
+# Example: API endpoints: p99 < 200ms
+# Example: DB connection pool: max 20 connections per instance
+
+[failure_patterns]
+# Patterns that have caused production incidents.
+# Zenith checks every PR diff for these patterns and flags matches.
+# Format: pattern description → consequence (incident YYYY-MM)
+# Example: db query inside loop → connection pool exhaustion (incident 2024-03)
+# Example: unbounded list fetch → OOM on large datasets (incident 2024-08)
+
+[architecture]
+# Constraints that reviewers must enforce.
+# Referenced in review findings when a PR violates them.
+# Example: never couple payment flow to session state (ADR-007)
+# Example: all external API calls go through src/clients/ — no direct fetch elsewhere
+
+[existing_utilities]
+# Utilities and helpers that already exist in the codebase.
+# Zenith flags PRs that reinvent them instead of reusing them.
+# Format: path — description
+# Example: src/utils/retry.js — circuit breaker with exponential backoff, use instead of custom retry logic
+# Example: src/db/paginate.py — cursor-based pagination helper, use instead of offset queries
+
+[critical_paths]
+# Areas where bugs have the highest blast radius.
+# Zenith applies extra scrutiny to PRs that touch these paths.
+# Example: payment flow, auth token validation, data migration scripts
+# Example: src/auth/, src/billing/, scripts/migrate/

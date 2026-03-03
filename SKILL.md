@@ -387,6 +387,7 @@ Map user's request to ONE intent. Use both request text AND situation to classif
 - `INTENT_UNSTASH` - unstash, restore my stash, get my changes back
 - `INTENT_FIX_CONFLICT` - PR has conflicts, merge conflict on GitHub, can't merge PR
 - `INTENT_STACK_STATUS` - show my stack, stack overview, where is my PR in the stack, how many levels deep
+- `INTENT_REVIEW_PR` - review my PR, self-review, review my changes, review PR 123, review #42, adversarial review
 - `INTENT_HELP` - help, what can you do, what commands exist
 - `INTENT_UNKNOWN` - cannot determine intent
 
@@ -2312,6 +2313,173 @@ If all branches are open and up to date:
 ```
 
 Next: guidance based on the dominant issue in the stack (merged > no PR > CI failing > clean)
+
+### INTENT_REVIEW_PR
+
+Detect mode from user request:
+- PR number present (e.g. "review PR 123", "review #42") → **reviewer mode**
+- Otherwise (e.g. "review my PR", "self-review", "review my changes") → **author mode**
+
+── AUTHOR MODE ──
+
+Check current branch:
+```bash
+git branch --show-current          # CMD_CURRENT_BRANCH
+```
+
+If on {base_branch}:
+```
+blocked — you are on {base_branch}
+│ switch to a feature branch before running a self-review
+│ run /zenith continue my work to pick up a feature branch
+```
+Stop.
+
+Execute:
+```bash
+git fetch origin                   # CMD_FETCH_ORIGIN
+gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open --limit 1
+```
+
+Collect diff:
+```bash
+# If open PR exists:
+gh pr diff                         # CMD_PR_DIFF (no PR number = current branch's open PR)
+
+# If no open PR:
+git diff {base_branch}...HEAD      # CMD_DIFF_FROM_BASE
+```
+
+Collect commits:
+```bash
+git log {base_branch}..HEAD --oneline   # CMD_LOG_SINCE_BASE
+```
+
+── REVIEWER MODE ──
+
+Execute:
+```bash
+gh pr view {pr_number} --json title,body,author,baseRefName,state,number   # CMD_PR_VIEW_JSON
+gh pr diff {pr_number}             # CMD_PR_DIFF
+gh pr checks {pr_number}           # CMD_PR_CHECKS
+```
+
+── CONTEXT GATHERING (both modes) ──
+
+Extract touched file list from diff (lines starting with `diff --git`).
+
+Layer 1 — git history (always run):
+```bash
+# For each touched file:
+git log --oneline --since="1 year ago" -- {file} | wc -l   # CMD_LOG_FILE_HISTORY
+git log --all --oneline --grep="revert\|hotfix" -- {touched_files}   # CMD_LOG_REVERTS_IN_FILES
+```
+
+Layer 2 — redundancy scan (always run):
+Extract new symbol names from diff (function, class, const definitions on lines starting with `+`).
+```bash
+# For each new symbol:
+git grep -l "{symbol}"             # CMD_GREP_SYMBOL
+```
+
+Layer 3 — docs (if present):
+```bash
+head -60 README.md 2>/dev/null
+ls docs/adr/ 2>/dev/null | head -10
+```
+
+Layer 4 — .zenith-context (if present):
+```bash
+cat "$REPO_ROOT/.zenith-context" 2>/dev/null
+```
+
+── PASS 1: BENEVOLENT ──
+
+Using: diff, commit messages, PR description (reviewer mode only), README head (if present).
+
+Output 3 to 5 plain English bullets stating what this PR actually does. Facts only, no opinions. State the mechanism, not the intent.
+
+── PASS 2: SIGNALS ──
+
+Scope check:
+- Author mode: run contamination check against {project_folder} (see references/contamination.md). Flag any files outside scope.
+- Reviewer mode: flag files that span more than one logical area (e.g. both API layer and DB layer in the same PR).
+
+Redundancy:
+- For each new symbol where CMD_GREP_SYMBOL found existing matches: note the symbol and the existing file path.
+
+History signals:
+- Files with >10 commits in the past year (Layer 1): flag as volatile with commit count.
+- Files with any revert or hotfix commits (Layer 1): flag as fragile with commit reference.
+
+.zenith-context matches (Layer 4, if present):
+- For each known failure pattern in [failure_patterns]: check if diff contains the same pattern.
+- If match found: flag with description and incident reference from the context file.
+
+── PASS 3: ADVERSARIAL (ISOLATED) ──
+
+Do not reference Pass 1 or Pass 2 output. Read only the raw diff.
+
+Persona: You are a principal engineer doing a final architecture gate. Your default verdict is REJECT. The PR must earn approval. Assume the author is junior until the code proves otherwise. You are not here to help — you are here to protect the codebase.
+
+For every concern found, provide all four fields:
+- line citation (specific line number from the diff)
+- failure scenario (concrete: "when X under Y condition, result is Z")
+- alternative (specific rewrite or different approach)
+- question for author (what they must answer before merging)
+
+Check explicitly against this list — do not skip items:
+- Is this solving the right problem, or a symptom?
+- What happens on failure? Is failure recoverable?
+- What coupling does this introduce that will hurt later?
+- Is there a simpler way to achieve the same outcome?
+- Worst-case load or data scenario — is it handled?
+- Will the next engineer understand this without asking the author?
+- What does this make harder to change in 6 months?
+- Hidden assumptions about callers or environment?
+
+── OUTPUT ──
+
+Print this block. Author mode uses {current_branch}; reviewer mode uses PR #{pr_number} — {title} ({author}).
+
+```
+reviewing — {current_branch}  /  PR #{pr_number} — {title} ({author})
+│ CI: ✓/✗/…  base: {base_branch}  +{lines_added} -{lines_removed}
+│ 3-pass review: summary → signals → adversarial (pass 3 sees raw diff only)
+
+── what it does ──────────────────────────────────────────
+│ • [bullet 1]
+│ • [bullet 2]
+│ • [bullet 3]
+
+── signals ───────────────────────────────────────────────
+│ scope      ✓ within {project_folder}/   OR   ✗ outside scope: {files}
+│ volatile   {file} — {n} commits in past year, {n} reverts/hotfixes
+│ duplicate  {symbol} already exists at {path}
+│ pattern    ⚠ matches known failure: [description] ([incident ref])
+
+── concerns ──────────────────────────────────────────────
+│ P1  line {n}: [citation]
+│     failure:     [concrete scenario]
+│     alternative: [specific rewrite]
+│     question:    [what author must answer before merging]
+│
+│ P2  line {n}: [citation]
+│     failure:     [concrete scenario]
+│     alternative: [specific rewrite]
+│     question:    [what author must answer before merging]
+
+── biggest concern ───────────────────────────────────────
+│ [single opinionated architectural take — the one thing a principal would
+│  push back on hardest. not a summary of P1. a verdict.]
+
+  verdict  NEEDS CHANGES  /  APPROVED  /  DISCUSS
+```
+
+If signals section has no findings: omit that row (do not print empty rows).
+If no concerns found in Pass 3: print `── concerns ──` header followed by `│ none found`.
+
+next: "next: share these findings with the PR author, or run /zenith review PR {n} to review a teammate's PR"
 
 ## Step 5: After Every Operation
 

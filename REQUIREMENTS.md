@@ -296,6 +296,22 @@
 - INTENT_MERGE_COMPLETE: handle three cases — own PR merged, parent PR merged, standard
 - PR retargeting: update PR base with gh pr edit --base after parent is merged
 
+### FR-32: Adversarial PR Review (INTENT_REVIEW_PR)
+- Accept two modes from natural language: author mode (current branch) and reviewer mode (specific PR number)
+- Author mode: block if on base branch; collect diff from open PR if one exists, otherwise diff against base branch
+- Reviewer mode: fetch PR metadata, diff, and CI check status via GitHub CLI
+- Three-pass review: Pass 1 (benevolent summary), Pass 2 (signals), Pass 3 (adversarial, isolated from prior passes)
+- Pass 3 sees only the raw diff — must not reference Pass 1 or Pass 2 output
+- Pass 3 persona: principal engineer, default verdict REJECT, assumes junior author
+- Every concern in Pass 3 must include all four fields: line citation, failure scenario, alternative, question for author
+- Pass 3 must check all eight explicit items: right problem vs symptom, failure recovery, coupling, simpler path, worst-case data/load, readability, changeability in 6 months, hidden assumptions
+- Signals layer (Pass 2): scope check (contamination for author, logical area for reviewer), redundancy scan (git grep for new symbols), history volatility (>10 commits/year), fragility (revert/hotfix commits in file history)
+- Context tiering: git history always; README head and ADR listing if present; `.zenith-context` if present — all optional, no error if absent
+- `.zenith-context`: team-maintained file committed to repo root; contains operational constraints, failure patterns, architecture rules, existing utilities, critical paths
+- Output: fixed-format block with reviewing header, CI status, three labeled sections (what it does / signals / concerns), biggest concern verdict
+- No GitHub posting — terminal output only
+- Degrade gracefully: missing `.zenith-context`, missing README, or absent CI checks must not block the review
+
 ## Non-Functional Requirements
 
 ### NFR-1: Single Entry Point

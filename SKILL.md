@@ -2550,13 +2550,35 @@ Parse output. For each hook, print one line:
 │    {failure detail line 2}
 ```
 
-If all passed:
+After pre-commit completes, check for files modified by auto-fixing hooks:
+```bash
+git diff --name-only   # CMD_DIFF_UNSTAGED (files modified since last stage)
+```
+
+Compare this list against the original changed files list. Any file that appears in the post-run diff but was not already unstaged before the run was auto-fixed by a hook (e.g. black, isort, prettier, end-of-file-fixer).
+
+Classify outcomes into three buckets:
+- **auto-fixed**: hooks that modified files in place (exit non-zero, files changed on disk)
+- **needs manual fix**: hooks that failed and did NOT modify files (exit non-zero, no file changes)
+- **passed**: hooks that exited zero
+
+If all passed and no auto-fixes:
 ```
   ✓ clean  all hooks passed
 ```
 next: "next: run /zenith save to commit, or /zenith push to commit and open a PR"
 
-If any failed:
+If any hooks auto-fixed files (with or without other failures):
+```
+  ~ auto-fixed  {n} hook(s) modified files — review the changes below
+  │ {file}  ← modified by {hook_name}
+  │ {file}  ← modified by {hook_name}
+  │
+  │ these changes are not staged — review them, then run /zenith run checks again
+```
+next: "next: review the auto-fixed changes above (run /zenith what did I change), then re-run /zenith run checks"
+
+If hooks failed without auto-fixing (no file modifications):
 ```
   ✗ fix required  {n} hook(s) failed — see details above
 ```

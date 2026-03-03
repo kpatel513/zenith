@@ -176,6 +176,62 @@ Same phrase in different situations should produce different behavior.
 
 ---
 
+---
+
+## INTENT_REVIEW_PR — Author Mode
+
+**Setup:** On a feature branch with an open PR (`gh pr create` already run).
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith review my PR` | Runs 3-pass review on current branch's open PR diff; all three passes present; each concern has line citation, failure scenario, alternative, and question |
+| `/zenith self-review` | Same as above |
+| `/zenith review my changes` | Runs 3-pass review against `{base_branch}` diff (no open PR required); signals section present |
+
+**Setup:** On `{base_branch}` (e.g. main).
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith review my PR` | Blocked — prints "switch to a feature branch before running a self-review" |
+
+**Setup:** Feature branch, `.zenith-context` present in repo root.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith review my PR` | Signals section includes failure pattern matches from `.zenith-context` if diff matches any pattern |
+
+**Setup:** Feature branch, no `.zenith-context` in repo root.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith review my PR` | Review runs cleanly using git history and codebase scan only — no error, no mention of missing file |
+
+---
+
+## INTENT_REVIEW_PR — Reviewer Mode
+
+**Setup:** Any branch; teammate has an open PR with a known number.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith review PR 123` | Fetches PR 123 diff via `gh pr diff 123`; runs 3-pass review; header shows PR title and author |
+| `/zenith review #42` | Same — parses PR number from `#42` format |
+| `/zenith review PR 123` (CI failing) | Review header shows `CI: ✗`; CI state surfaced in output |
+
+**Setup:** Any branch; `.zenith-context` present in repo root.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith review PR 123` | Signals section includes operational constraints and failure pattern matches if diff triggers them |
+
+**Setup:** Any branch; `.zenith-context` absent.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith review PR 123` | Review runs on git history + codebase scan only — no error, signals section omits pattern row |
+
+---
+
 ## Output Format
 
 Verify that output format matches the spec in `zenith.md`:

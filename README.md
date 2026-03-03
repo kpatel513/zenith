@@ -286,6 +286,8 @@ You don't have to memorize exact phrases. Zenith understands intent.
 | `unstash` | Restores changes saved by a previous stash |
 | `clean up branches` | Deletes your old merged branches |
 | `show my stack` | Shows every branch in your stack with PR status and CI state |
+| `review my PR` | Three-pass adversarial review of your branch: plain summary, signals (scope/volatility/duplicates), then a principal-engineer rejection pass |
+| `review PR 123` | Same three-pass review for a teammate's PR — fetches the diff, runs all three passes |
 | `help` | Shows this table |
 
 ---
@@ -311,6 +313,90 @@ Run `I merged the PR`. Zenith detects which PR merged and handles the cascade:
 Your PR on GitHub automatically updates to show the correct diff.
 
 **Stack info is stored in git config locally** — it is never committed and never sent anywhere.
+
+---
+
+## PR Review
+
+Zenith runs a three-pass adversarial review — designed to behave like a skeptical principal engineer, not a helpful assistant. It works in two modes.
+
+**Author mode** — before you submit, while you're still on your branch:
+```
+/zenith review my PR
+/zenith self-review
+/zenith review my changes
+```
+
+**Reviewer mode** — when you've been assigned to review someone else's PR:
+```
+/zenith review PR 123
+/zenith review #42
+```
+
+### How the three passes work
+
+**Pass 1 — Benevolent.** What does this diff actually do? Zenith reads the raw diff, the commit messages, and the PR description and produces 3–5 plain English bullets. Facts, no opinions.
+
+**Pass 2 — Signals.** Automated checks against the codebase:
+- **Scope** — are all changed files inside your project folder, or did the PR accidentally touch something else?
+- **Volatile files** — files with more than 10 commits in the past year are flagged; bugs introduced here tend to be expensive
+- **Fragile files** — files that have had revert or hotfix commits are flagged with the history
+- **Duplicate symbols** — new functions or classes are grep'd against the whole codebase; if the same name already exists somewhere, it's surfaced
+
+**Pass 3 — Adversarial (isolated).** Pass 3 sees only the raw diff — it never reads Pass 1 or Pass 2 output. Persona: principal engineer, default verdict is REJECT, assumes junior author. Every concern it raises must have all four fields:
+- line citation
+- failure scenario (concrete: "when X under Y condition, result is Z")
+- alternative implementation
+- question the author must answer before merging
+
+Pass 3 explicitly checks eight things: right problem vs. symptom, failure recovery, coupling introduced, simpler path available, worst-case load and data, readability for the next engineer, what it makes harder to change in 6 months, and hidden assumptions about callers or environment.
+
+### Team context file
+
+Create `.zenith-context` at the repo root (committed, not personal) to raise the quality ceiling:
+
+```
+[failure_patterns]
+db query inside loop → connection pool exhaustion (incident 2024-03)
+
+[existing_utilities]
+src/utils/retry.js — circuit breaker, use instead of custom retry logic
+
+[architecture]
+never couple payment flow to session state (ADR-007)
+```
+
+A template is at `assets/.zenith-context.template`. Zenith checks every PR diff against the patterns in this file and flags matches in the signals section. No file, no error — it just runs on git history and codebase scan alone.
+
+### What the output looks like
+
+```
+reviewing — feature/add-rate-limiter
+│ CI: ✓  base: main  +84 -12
+│ 3-pass review: summary → signals → adversarial (pass 3 sees raw diff only)
+
+── what it does ──────────────────────────────────────────
+│ • Adds a token bucket rate limiter to the API gateway middleware
+│ • Stores per-user token counts in Redis with a 60s TTL
+│ • Returns 429 with Retry-After header when limit is exceeded
+
+── signals ───────────────────────────────────────────────
+│ scope     ✓ within team-api/
+│ volatile  src/middleware/auth.js — 18 commits in past year, 2 reverts
+│ duplicate RateLimiter already exists at src/utils/throttle.js
+
+── concerns ──────────────────────────────────────────────
+│ P1  line 47: Redis client initialized inside the middleware function
+│     failure:     new connection on every request under load — pool exhaustion
+│     alternative: initialize once at module load, pass as dependency
+│     question:    what's the expected RPS and how many middleware instances run concurrently?
+
+── biggest concern ───────────────────────────────────────
+│ The rate limiter is applied after auth, so a flood of unauthenticated
+│ requests bypasses it entirely. Protect the auth endpoint first.
+
+  verdict  NEEDS CHANGES
+```
 
 ---
 

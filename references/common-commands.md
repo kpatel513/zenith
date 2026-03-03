@@ -417,6 +417,59 @@ git config --get user.email
 
 ---
 
+## GitHub PR Commands
+
+### CMD_PR_DIFF
+```bash
+gh pr diff {pr_number}
+```
+**Purpose:** Show full diff of a pull request
+**Output:** Unified diff of all changes in the PR
+**Note:** Omit `{pr_number}` to diff the current branch's open PR
+**Used for:** INTENT_REVIEW_PR — fetching diff for author and reviewer modes
+
+### CMD_PR_VIEW_JSON
+```bash
+gh pr view {pr_number} --json title,body,author,baseRefName,state,number
+```
+**Purpose:** Fetch PR metadata as JSON
+**Output:** JSON object with title, body, author, base branch, state, and number
+**Used for:** INTENT_REVIEW_PR reviewer mode — collecting PR context
+
+### CMD_PR_CHECKS
+```bash
+gh pr checks {pr_number}
+```
+**Purpose:** Show CI/CD check status for a PR
+**Output:** List of checks with pass/fail status
+**Used for:** INTENT_REVIEW_PR — surfacing CI state in review header
+
+### CMD_LOG_FILE_HISTORY
+```bash
+git log --oneline --since="1 year ago" -- {file}
+```
+**Purpose:** Count recent commits touching a specific file
+**Output:** Oneline log entries for the file over the past year
+**Used for:** INTENT_REVIEW_PR — detecting volatile files with high churn
+
+### CMD_LOG_REVERTS_IN_FILES
+```bash
+git log --all --oneline --grep="revert\|hotfix" -- {files}
+```
+**Purpose:** Find revert and hotfix commits touching specific files
+**Output:** Oneline log entries matching revert or hotfix pattern
+**Used for:** INTENT_REVIEW_PR — flagging fragile files with incident history
+
+### CMD_GREP_SYMBOL
+```bash
+git grep -l "{symbol}"
+```
+**Purpose:** Find files containing a symbol name
+**Output:** List of file paths where symbol appears
+**Used for:** INTENT_REVIEW_PR — redundancy detection (symbol already exists elsewhere)
+
+---
+
 ## Reference Usage
 
 **To reference a command in documentation:**

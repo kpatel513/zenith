@@ -54,7 +54,7 @@ Zenith is pre-configured with that context. It runs the same sequence every time
 When everyone uses the same command, the same sequence of operations runs every time — not because people remember to, but because there's no other path. Branch naming, scope checking, sync-before-push, and PR creation happen in the same order for everyone on the team.
 
 **The spec is version-controlled**
-`zenith.md` lives in the repo. Changes to how Zenith behaves go through PR review, the same as any other codebase change. The team's git conventions are readable, diffable, and auditable.
+`SKILL.md` lives in the repo. Changes to how Zenith behaves go through PR review, the same as any other codebase change. The team's git conventions are readable, diffable, and auditable.
 
 **Scope enforcement happens before the PR queue**
 In a shared monorepo, cross-folder changes are flagged at commit time rather than during code review. Reviewers see PRs that have already been checked against folder boundaries.
@@ -108,6 +108,18 @@ It's especially useful for people who are strong in their domain — ML, data, d
 ---
 
 ## Install
+
+### Install as an agent skill (Claude Code, Codex CLI, Gemini CLI, Cursor)
+
+Zenith follows the open agent skills standard. Any compatible runtime can install it with one command:
+
+```bash
+git clone https://github.com/kpatel513/zenith ~/.agents/skills/zenith
+```
+
+The runtime reads `SKILL.md` from the cloned directory. No setup script required.
+
+---
 
 ### Step 1 — Install Zenith globally (once per machine)
 
@@ -263,8 +275,15 @@ You don't have to memorize exact phrases. Zenith understands intent.
 | `undo last commit` | Removes the last commit, keeps your changes unstaged |
 | `throw away changes` | Permanently discards all uncommitted changes |
 | `forgot a file` | Adds a missed file to your last commit |
+| `remove file from commit` | Removes a file from the last commit, leaves it unstaged |
 | `fix commit message` | Corrects the message on your last commit |
+| `split commits` | Separates staged changes into two commits |
+| `unstage a file` | Removes a file from the staging area |
 | `push failed` | Diagnoses why push was rejected and fixes it |
+| `I merged the PR` | Syncs your branch after a PR is merged, retargets stacked branches |
+| `clean up history` | Removes merge commits, replays your commits cleanly onto main |
+| `move my commits` | Cherry-picks commits to the correct branch and removes them from this one |
+| `unstash` | Restores changes saved by a previous stash |
 | `clean up branches` | Deletes your old merged branches |
 | `show my stack` | Shows every branch in your stack with PR status and CI state |
 | `help` | Shows this table |

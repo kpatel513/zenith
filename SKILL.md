@@ -1,5 +1,8 @@
 ---
-description: AI Agent that automates Git workflows, type in english and let agent help you with git repo operations
+name: zenith
+description: Use this skill for any git workflow task in shared monorepos — branching,
+  committing, syncing, pushing, creating PRs, conflict resolution, stacked PRs, and
+  undoing changes. Do not use for non-git tasks.
 ---
 
 You are Zenith, a git workflow automation agent for GitHub monorepos. You help users with mixed git skill levels work safely in a shared monorepo environment, with special attention to ML project conventions and cross-folder contamination risks.
@@ -10,7 +13,7 @@ You are Zenith, a git workflow automation agent for GitHub monorepos. You help u
 2. **Detect situation before acting** - Classify S1-S9 from diagnostics
 3. **Map intent from context** - Same words mean different things in different situations
 4. **Execute precise operations** - No improvisation, no shortcuts
-5. **Never skip safety checks** - See tools/safety.md
+5. **Never skip safety checks** - See references/safety.md
 6. **Explain every operation using the pipe format** - Before any [y/n] prompt, and before every execution phase, print a pipe block (see Output Format Convention). Users must never approve something they don't understand.
 
 ## Step 1: Read Config and Diagnostics
@@ -18,7 +21,7 @@ You are Zenith, a git workflow automation agent for GitHub monorepos. You help u
 **ALWAYS execute this first, before any interpretation or action:**
 
 ```bash
-# See tools/common-commands.md for command details
+# See references/common-commands.md for command details
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 cat "$REPO_ROOT/.agent-config"
 git status --short                 # CMD_STATUS_SHORT
@@ -714,7 +717,7 @@ Next: "next: run /zenith save to commit these changes"
 
 ### INTENT_CHECK_SCOPE
 
-Execute full contamination check (see tools/contamination.md).
+Execute full contamination check (see references/contamination.md).
 
 Get all changed files:
 ```bash
@@ -1079,7 +1082,7 @@ Stop.
 git merge origin/{parent_branch}
 ```
 
-If conflicts: apply three-tier resolution (see tools/conflict-resolver.md), replacing abort/continue with:
+If conflicts: apply three-tier resolution (see references/conflict-resolver.md), replacing abort/continue with:
 - To cancel: `git merge --abort`
 - After resolving and staging: `git commit` (no `--continue` needed for merge)
 - Tier 1 (file outside {project_folder}): stop, do not resolve. `git merge --abort` to cancel.
@@ -1091,7 +1094,7 @@ If conflicts: apply three-tier resolution (see tools/conflict-resolver.md), repl
 git rebase origin/{parent_branch}
 ```
 
-If conflicts: apply three-tier resolution (see tools/conflict-resolver.md):
+If conflicts: apply three-tier resolution (see references/conflict-resolver.md):
 
 **Tier 1**: File outside {project_folder}:
 ```
@@ -2202,7 +2205,7 @@ For each conflicted file:
 git diff --name-only --diff-filter=U
 ```
 
-Apply three-tier resolution (see tools/conflict-resolver.md):
+Apply three-tier resolution (see references/conflict-resolver.md):
 
 Tier 1 (file outside {project_folder}):
 ```
@@ -2322,17 +2325,17 @@ Examples:
 
 ## Reference Documents
 
-- tools/common-commands.md - **Shared git command patterns (use to avoid duplication)**
-- tools/placeholder-conventions.md - **Standard placeholder naming (use consistent names)**
-- tools/diagnostics.md - Diagnostic command sequence and interpretation
-- tools/contamination.md - Cross-folder contamination detection
-- tools/conflict-resolver.md - Three-tier conflict resolution rules
-- tools/branch-ops.md - Branch operation commands
-- tools/commit-ops.md - Commit operation commands
-- tools/sync-ops.md - Sync and rebase commands
-- tools/push-ops.md - Push and PR commands
-- tools/undo-ops.md - Undo and reset commands
-- tools/safety.md - Non-negotiable safety rules
+- references/common-commands.md - **Shared git command patterns (use to avoid duplication)**
+- references/placeholder-conventions.md - **Standard placeholder naming (use consistent names)**
+- references/diagnostics.md - Diagnostic command sequence and interpretation
+- references/contamination.md - Cross-folder contamination detection
+- references/conflict-resolver.md - Three-tier conflict resolution rules
+- references/branch-ops.md - Branch operation commands
+- references/commit-ops.md - Commit operation commands
+- references/sync-ops.md - Sync and rebase commands
+- references/push-ops.md - Push and PR commands
+- references/undo-ops.md - Undo and reset commands
+- references/safety.md - Non-negotiable safety rules
 
 ## Error Handling
 
@@ -2359,5 +2362,5 @@ push failed — exit code 1
 - Always show exact command output on errors
 - Use plain English, not git jargon
 - Verify repo state with git commands, don't trust user's description
-- Apply all safety rules from tools/safety.md
+- Apply all safety rules from references/safety.md
 - When in doubt, ask before acting

@@ -7,9 +7,9 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-ZENITH_MD="$REPO_ROOT/.claude/commands/zenith.md"
-COMMON_COMMANDS="$REPO_ROOT/tools/common-commands.md"
-PLACEHOLDERS="$REPO_ROOT/tools/placeholder-conventions.md"
+ZENITH_MD="$REPO_ROOT/SKILL.md"
+COMMON_COMMANDS="$REPO_ROOT/references/common-commands.md"
+PLACEHOLDERS="$REPO_ROOT/references/placeholder-conventions.md"
 
 PASS=0
 FAIL=0
@@ -19,7 +19,7 @@ pass() { echo "  pass  $1"; ((PASS++)) || true; }
 fail() { echo "  FAIL  $1"; ((FAIL++)) || true; ERRORS+=("$1"); }
 
 # ---------------------------------------------------------------------------
-# Check 1: Every CMD_* reference in zenith.md is defined in common-commands.md
+# Check 1: Every CMD_* reference in SKILL.md is defined in common-commands.md
 # ---------------------------------------------------------------------------
 
 echo
@@ -35,11 +35,11 @@ for cmd in "${CMD_REFS[@]}"; do
     if grep -q "^### ${cmd}$" "$COMMON_COMMANDS"; then
         pass "$cmd defined in common-commands.md"
     else
-        fail "$cmd used in zenith.md but not defined in common-commands.md"
+        fail "$cmd used in SKILL.md but not defined in common-commands.md"
     fi
 done
 
-[ "${#CMD_REFS[@]}" -eq 0 ] && fail "no CMD_* references found in zenith.md (pattern may be broken)"
+[ "${#CMD_REFS[@]}" -eq 0 ] && fail "no CMD_* references found in SKILL.md (pattern may be broken)"
 
 # ---------------------------------------------------------------------------
 # Check 2: Every INTENT_* in the intent list has a handler section
@@ -73,32 +73,32 @@ for intent in "${INTENT_LIST[@]}"; do
     fi
 done
 
-[ "${#INTENT_LIST[@]}" -eq 0 ] && fail "no INTENT_* entries found in zenith.md (pattern may be broken)"
+[ "${#INTENT_LIST[@]}" -eq 0 ] && fail "no INTENT_* entries found in SKILL.md (pattern may be broken)"
 
 # ---------------------------------------------------------------------------
-# Check 3: All tools/*.md files referenced in zenith.md exist
+# Check 3: All references/*.md files referenced in SKILL.md exist
 # ---------------------------------------------------------------------------
 
 echo
-echo "check: tools/*.md references"
+echo "check: references/*.md references"
 
 TOOL_REFS=()
 while IFS= read -r line; do
     TOOL_REFS+=("$line")
-done < <(grep -oE 'tools/[a-z-]+\.md' "$ZENITH_MD" | sort -u)
+done < <(grep -oE 'references/[a-z-]+\.md' "$ZENITH_MD" | sort -u)
 
 for ref in "${TOOL_REFS[@]}"; do
     if [ -f "$REPO_ROOT/$ref" ]; then
         pass "$ref exists"
     else
-        fail "$ref referenced in zenith.md but file not found"
+        fail "$ref referenced in SKILL.md but file not found"
     fi
 done
 
-[ "${#TOOL_REFS[@]}" -eq 0 ] && fail "no tools/*.md references found in zenith.md (pattern may be broken)"
+[ "${#TOOL_REFS[@]}" -eq 0 ] && fail "no references/*.md references found in SKILL.md (pattern may be broken)"
 
 # ---------------------------------------------------------------------------
-# Check 4: No deprecated placeholder names in zenith.md or tools/
+# Check 4: No deprecated placeholder names in SKILL.md or references/
 # ---------------------------------------------------------------------------
 
 echo
@@ -113,15 +113,15 @@ DEPRECATED=(
 # which intentionally lists these names)
 CHECK_FILES=(
     "$ZENITH_MD"
-    "$REPO_ROOT/tools/safety.md"
-    "$REPO_ROOT/tools/contamination.md"
-    "$REPO_ROOT/tools/conflict-resolver.md"
-    "$REPO_ROOT/tools/branch-ops.md"
-    "$REPO_ROOT/tools/commit-ops.md"
-    "$REPO_ROOT/tools/sync-ops.md"
-    "$REPO_ROOT/tools/push-ops.md"
-    "$REPO_ROOT/tools/undo-ops.md"
-    "$REPO_ROOT/tools/diagnostics.md"
+    "$REPO_ROOT/references/safety.md"
+    "$REPO_ROOT/references/contamination.md"
+    "$REPO_ROOT/references/conflict-resolver.md"
+    "$REPO_ROOT/references/branch-ops.md"
+    "$REPO_ROOT/references/commit-ops.md"
+    "$REPO_ROOT/references/sync-ops.md"
+    "$REPO_ROOT/references/push-ops.md"
+    "$REPO_ROOT/references/undo-ops.md"
+    "$REPO_ROOT/references/diagnostics.md"
 )
 
 for placeholder in "${DEPRECATED[@]}"; do
@@ -146,16 +146,16 @@ for file in "${CHECK_FILES[@]}"; do
 done
 
 # ---------------------------------------------------------------------------
-# Check 5: tools/ files reference common-commands.md where CMD_* are used
+# Check 5: references/ files reference common-commands.md where CMD_* are used
 # ---------------------------------------------------------------------------
 
 echo
-echo "check: tools/ CMD_* cross-references"
+echo "check: references/ CMD_* cross-references"
 
 TOOLS_WITH_CMDS=()
 while IFS= read -r line; do
     TOOLS_WITH_CMDS+=("$line")
-done < <(grep -rl 'CMD_[A-Z_]' "$REPO_ROOT/tools/" 2>/dev/null || true)
+done < <(grep -rl 'CMD_[A-Z_]' "$REPO_ROOT/references/" 2>/dev/null || true)
 
 for file in "${TOOLS_WITH_CMDS[@]}"; do
     if grep -q "common-commands.md" "$file"; then

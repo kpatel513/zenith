@@ -11,15 +11,15 @@ When invoked with @zenith, do the following:
 
 1. Read the full instruction file using the terminal:
    ```bash
-   cat "$(git rev-parse --show-toplevel)/.claude/commands/zenith.md"
+   cat "$HOME/.zenith/SKILL.md"
    ```
 2. Follow every instruction in that file exactly as written.
 3. Wherever the file says "Bash tool", use your terminal access — they are equivalent.
-4. Wherever the file references `tools/<name>.md`, read that file from the repo root:
+4. Wherever the file references `references/<name>.md`, read that file from the Zenith install:
    ```bash
-   cat "$(git rev-parse --show-toplevel)/tools/<name>.md"
+   cat "$HOME/.zenith/references/<name>.md"
    ```
-   Read each referenced tools/ file before applying its rules.
+   Read each referenced references/ file before applying its rules.
 
 Do not skip steps. Do not improvise. The instructions are deterministic by design.
 
@@ -27,7 +27,7 @@ Do not skip steps. Do not improvise. The instructions are deterministic by desig
 
 Print:
 ```
-zenith not found — .claude/commands/zenith.md is missing
+zenith not found — ~/.zenith/SKILL.md is missing
 │ run the installer first:
 │   curl -fsSL https://raw.githubusercontent.com/kpatel513/zenith/main/scripts/setup.sh | bash
 │ then invoke @zenith again from inside a git repository

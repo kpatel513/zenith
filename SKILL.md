@@ -388,6 +388,7 @@ Map user's request to ONE intent. Use both request text AND situation to classif
 - `INTENT_FIX_CONFLICT` - PR has conflicts, merge conflict on GitHub, can't merge PR
 - `INTENT_STACK_STATUS` - show my stack, stack overview, where is my PR in the stack, how many levels deep
 - `INTENT_REVIEW_PR` - review my PR, self-review, review my changes, review PR 123, review #42, adversarial review
+- `INTENT_RUN_CHECKS` - run checks, check my code, run pre-commit, lint my changes, pre-commit check, run hooks, check for issues
 - `INTENT_HELP` - help, what can you do, what commands exist
 - `INTENT_UNKNOWN` - cannot determine intent
 
@@ -425,6 +426,7 @@ move my commits           | Cherry-pick commits to correct branch and remove fro
 unstash                   | Restore changes saved by a previous stash
 PR has conflicts          | Resolve merge conflict blocking your PR
 show my stack             | Show the full stack: each branch, its PR status, and CI state
+run checks                | Run pre-commit hooks against changed files and report pass/fail per hook
 help                      | Show this table
 ```
 
@@ -2480,6 +2482,85 @@ If signals section has no findings: omit that row (do not print empty rows).
 If no concerns found in Pass 3: print `── concerns ──` header followed by `│ none found`.
 
 next: "next: share these findings with the PR author, or run /zenith review PR {n} to review a teammate's PR"
+
+### INTENT_RUN_CHECKS
+
+Collect changed files scoped to {project_folder}:
+```bash
+git diff --name-only HEAD          # CMD_DIFF_NAME_ONLY
+git diff --name-only --cached      # CMD_DIFF_CACHED_NAME_ONLY
+```
+
+Take the union of both lists. If {project_folder} is ".", include all changed files. Otherwise filter to files whose path starts with {project_folder}/.
+
+If no changed files found:
+```
+blocked — nothing to check
+│ no changed files found in {project_folder}/
+│ make some changes first, then run /zenith run checks
+```
+Stop.
+
+Check prerequisites:
+```bash
+pre-commit --version 2>/dev/null   # CMD_PRE_COMMIT_VERSION
+```
+
+If pre-commit not installed:
+```
+blocked — pre-commit not installed
+│ install it with: pip install pre-commit
+│ then run: pre-commit install  (from your repo root)
+│ after that, run /zenith run checks again
+```
+Stop.
+
+Check for config:
+```bash
+test -f "$REPO_ROOT/.pre-commit-config.yaml"
+```
+
+If config missing:
+```
+blocked — no .pre-commit-config.yaml found
+│ copy the Zenith template to get started:
+│   cp ~/.zenith/assets/.pre-commit-config.yaml {REPO_ROOT}/.pre-commit-config.yaml
+│   pre-commit install
+│ then run /zenith run checks again
+```
+Stop.
+
+Print preview:
+```
+running checks — {n} file(s) in {project_folder}/
+│ {file}
+│ {file}
+```
+
+Execute:
+```bash
+pre-commit run --files {changed_files}   # CMD_PRE_COMMIT_RUN
+```
+
+Parse output. For each hook, print one line:
+```
+│ ✓  {hook_name}
+│ ✗  {hook_name}
+│    {failure detail line 1}
+│    {failure detail line 2}
+```
+
+If all passed:
+```
+  ✓ clean  all hooks passed
+```
+next: "next: run /zenith save to commit, or /zenith push to commit and open a PR"
+
+If any failed:
+```
+  ✗ fix required  {n} hook(s) failed — see details above
+```
+next: "next: fix the issues above, then run /zenith run checks again before committing"
 
 ## Step 5: After Every Operation
 

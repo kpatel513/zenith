@@ -286,6 +286,7 @@ You don't have to memorize exact phrases. Zenith understands intent.
 | `unstash` | Restores changes saved by a previous stash |
 | `clean up branches` | Deletes your old merged branches |
 | `show my stack` | Shows every branch in your stack with PR status and CI state |
+| `run checks` | Runs pre-commit hooks against your changed files and reports pass/fail per hook |
 | `review my PR` | Three-pass adversarial review of your branch: plain summary, signals (scope/volatility/duplicates), then a principal-engineer rejection pass |
 | `review PR 123` | Same three-pass review for a teammate's PR — fetches the diff, runs all three passes |
 | `help` | Shows this table |

@@ -232,6 +232,42 @@ Same phrase in different situations should produce different behavior.
 
 ---
 
+## INTENT_RUN_CHECKS
+
+**Setup:** Feature branch with changed files in {project_folder}/, pre-commit installed, .pre-commit-config.yaml present in repo root.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith run checks` | Runs hooks against changed files; shows ✓/✗ per hook; clean summary if all pass |
+| `/zenith check my code` | Same as above |
+| `/zenith lint my changes` | Same as above |
+
+**Setup:** Feature branch, no changed files.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith run checks` | Blocked — "nothing to check — no changed files found in {project_folder}/" |
+
+**Setup:** pre-commit not installed (uninstall or use a machine without it).
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith run checks` | Blocked — "pip install pre-commit" instruction, stops cleanly |
+
+**Setup:** pre-commit installed, no .pre-commit-config.yaml in repo root.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith run checks` | Blocked — template copy instruction (`cp ~/.zenith/assets/.pre-commit-config.yaml ...`), stops cleanly |
+
+**Setup:** A hook fails (e.g. introduce a trailing-whitespace or linting error in a changed file).
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith run checks` | ✗ for failing hook with failure detail lines; "fix required" summary; no commit or stage performed |
+
+---
+
 ## Output Format
 
 Verify that output format matches the spec in `zenith.md`:

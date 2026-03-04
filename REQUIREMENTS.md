@@ -312,6 +312,15 @@
 - No GitHub posting — terminal output only
 - Degrade gracefully: missing `.zenith-context`, missing README, or absent CI checks must not block the review
 
+### FR-33: Pre-Commit Checks (INTENT_RUN_CHECKS)
+- Run pre-commit hooks against changed files in {project_folder} only (not --all-files)
+- Short-circuit with clear message if no changed files exist
+- Check pre-commit is installed; if not, surface pip install instruction and stop
+- Check .pre-commit-config.yaml exists; if not, surface template copy instruction and stop
+- Show per-hook ✓/✗ results with failure detail in pipe format
+- End with clean summary or "fix required" summary
+- Never commit or stage files — this is a read-only check operation
+
 ## Non-Functional Requirements
 
 ### NFR-1: Single Entry Point

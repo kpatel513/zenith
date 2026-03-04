@@ -470,6 +470,26 @@ git grep -l "{symbol}"
 
 ---
 
+## Pre-Commit Commands
+
+### CMD_PRE_COMMIT_VERSION
+```bash
+pre-commit --version 2>/dev/null
+```
+**Purpose:** Check if pre-commit is installed
+**Output:** Version string, or empty if not installed
+**Used for:** INTENT_RUN_CHECKS — prerequisite check before running hooks
+
+### CMD_PRE_COMMIT_RUN
+```bash
+pre-commit run --files {files}
+```
+**Purpose:** Run all configured hooks against specific files
+**Output:** Hook results with pass/fail per hook and failure details
+**Used for:** INTENT_RUN_CHECKS — running hooks against changed files
+
+---
+
 ## Reference Usage
 
 **To reference a command in documentation:**

@@ -4,7 +4,7 @@
 
 Zenith is a **prompt-only project**. There is no build step, no runtime, no server, no package manager, no executable code. Every file is either a markdown specification or a bash installer script.
 
-The canonical skill definition lives in `SKILL.md` at the repo root. `adapters/claude-command.md` is a thin adapter that reads `SKILL.md` and delegates to it — `setup.sh` symlinks this to `~/.claude/commands/zenith.md`, which is what makes `/zenith` work in Claude Code. `.cursor/rules/zenith.mdc` does the same for Cursor. The `references/` files are specification documents that `SKILL.md` reads and follows during execution.
+The canonical skill definition lives in `ZENITH.md` at the repo root. `adapters/claude-command.md` is a thin adapter that reads `ZENITH.md` and delegates to it — `setup.sh` symlinks this to `~/.claude/commands/zenith.md`, which is what makes `/zenith` work in Claude Code. `.cursor/rules/zenith.mdc` does the same for Cursor. The `references/` files are specification documents that `ZENITH.md` reads and follows during execution.
 
 **Deployment is immediate and live.** Edits to `zenith.md` on `main` go out to all users on their next cron pull. There is no staging environment. Treat every change like a production deploy.
 
@@ -13,9 +13,9 @@ The canonical skill definition lives in `SKILL.md` at the repo root. `adapters/c
 ## File Structure and Roles
 
 ```
-SKILL.md                              — Canonical skill definition. The file all runtimes execute.
+ZENITH.md                              — Canonical skill definition. The file all runtimes execute.
 adapters/claude-command.md            — Claude Code adapter. Symlinked to ~/.claude/commands/zenith.md by setup.sh.
-.cursor/rules/zenith.mdc              — Cursor adapter. Thin wrapper that reads SKILL.md.
+.cursor/rules/zenith.mdc              — Cursor adapter. Thin wrapper that reads ZENITH.md.
 references/safety.md                  — Non-negotiable safety rules.
 references/contamination.md           — Cross-folder contamination detection logic.
 references/conflict-resolver.md       — Three-tier conflict resolution rules.
@@ -35,7 +35,7 @@ tests/test-setup.sh                   — Automated setup.sh behavior tests.
 tests/manual-checklist.md             — Situational tests requiring a real repo.
 ```
 
-**`references/` files are specifications, not executable code.** `SKILL.md` reads and implements them. Never add scripts or logic directly to `references/` files.
+**`references/` files are specifications, not executable code.** `ZENITH.md` reads and implements them. Never add scripts or logic directly to `references/` files.
 
 ---
 
@@ -56,7 +56,7 @@ Do not refactor, reformat, reorder, or "clean up" files that aren't part of the 
 3. Verify the execution order: detect → read state → check safety → show preview → confirm → execute → `next:`
 4. Check if any `references/` files referenced in the handler also need updating
 
-### Run lint before and after every change to SKILL.md
+### Run lint before and after every change to ZENITH.md
 
 ```bash
 bash tests/lint.sh
@@ -71,7 +71,7 @@ bash tests/test-setup.sh
 
 ### Know what to manually test
 
-Lint catches structural conventions. It does not catch behavior bugs. Before merging anything that touches `SKILL.md`, work through `tests/manual-checklist.md` for:
+Lint catches structural conventions. It does not catch behavior bugs. Before merging anything that touches `ZENITH.md`, work through `tests/manual-checklist.md` for:
 - The situations (S1-S9) your change is in
 - Any safety rules your change is near
 - The output format section if you changed any printed output
@@ -106,7 +106,7 @@ bash tests/test-setup.sh
 ```
 
 `lint.sh` checks:
-- Every `CMD_*` reference in `SKILL.md` is defined in `common-commands.md`
+- Every `CMD_*` reference in `ZENITH.md` is defined in `common-commands.md`
 - Every `INTENT_*` (except INTENT_HELP and INTENT_UNKNOWN) has a `### HANDLER` section
 - Every `references/*.md` reference exists on disk
 - No deprecated placeholder names (`{branch_name}`, `{selected_branch}`, `{commit}`)
@@ -129,7 +129,7 @@ All placeholders use `{curly_braces}`. Use only canonical names from `references
 
 ### Command references
 
-Shared git commands live in `references/common-commands.md` with `CMD_*` identifiers. Reference them as inline comments in `SKILL.md`:
+Shared git commands live in `references/common-commands.md` with `CMD_*` identifiers. Reference them as inline comments in `ZENITH.md`:
 
 ```bash
 git fetch origin    # CMD_FETCH_ORIGIN
@@ -158,7 +158,7 @@ These cannot be negotiated or worked around:
 - **No `-i` flag on git commands.** `git rebase -i`, `git add -i` — never. Claude Code does not support interactive terminal input.
 - **No server, API, or external services.** Zenith runs entirely locally with git and bash.
 - **No package manager dependencies.** Nothing requiring npm, pip, cargo, or any installer beyond git and bash.
-- **`.agent-config` is never committed and never written by `SKILL.md`.** It is personal. `setup.sh` writes it once. `SKILL.md` only reads it.
+- **`.agent-config` is never committed and never written by `ZENITH.md`.** It is personal. `setup.sh` writes it once. `ZENITH.md` only reads it.
 - **No hardcoded org names, repo names, or paths.** Everything comes from `.agent-config`. The only exception is `scripts/setup.sh`, which has a `ZENITH_REPO` placeholder to update at publish time.
 - **Safety rules in `references/safety.md` are non-negotiable.** Do not relax them. They exist because Zenith targets users with mixed git skill levels in shared repos where a wrong commit or force push can affect the whole team.
 
@@ -170,7 +170,7 @@ These cannot be negotiated or worked around:
 - **Show before doing.** Every destructive or irreversible operation shows a preview and asks for confirmation before running.
 - **Fail loudly and early.** When a situation is unclear or unsafe, stop and explain — don't attempt a best guess.
 - **Plain English output.** Zenith targets users who know their code but not git internals. Error messages must say what to do next, not just what went wrong.
-- **Prompt clarity over clever prompting.** An instruction that Claude misreads during execution is worse than no instruction. If a sentence in `SKILL.md` has two plausible interpretations, rewrite it until it has one.
+- **Prompt clarity over clever prompting.** An instruction that Claude misreads during execution is worse than no instruction. If a sentence in `ZENITH.md` has two plausible interpretations, rewrite it until it has one.
 
 ---
 

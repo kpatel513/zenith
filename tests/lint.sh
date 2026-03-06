@@ -7,7 +7,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-ZENITH_MD="$REPO_ROOT/SKILL.md"
+ZENITH_MD="$REPO_ROOT/ZENITH.md"
 COMMON_COMMANDS="$REPO_ROOT/references/common-commands.md"
 PLACEHOLDERS="$REPO_ROOT/references/placeholder-conventions.md"
 
@@ -19,7 +19,7 @@ pass() { echo "  pass  $1"; ((PASS++)) || true; }
 fail() { echo "  FAIL  $1"; ((FAIL++)) || true; ERRORS+=("$1"); }
 
 # ---------------------------------------------------------------------------
-# Check 1: Every CMD_* reference in SKILL.md is defined in common-commands.md
+# Check 1: Every CMD_* reference in ZENITH.md is defined in common-commands.md
 # ---------------------------------------------------------------------------
 
 echo
@@ -35,11 +35,11 @@ for cmd in "${CMD_REFS[@]}"; do
     if grep -q "^### ${cmd}$" "$COMMON_COMMANDS"; then
         pass "$cmd defined in common-commands.md"
     else
-        fail "$cmd used in SKILL.md but not defined in common-commands.md"
+        fail "$cmd used in ZENITH.md but not defined in common-commands.md"
     fi
 done
 
-[ "${#CMD_REFS[@]}" -eq 0 ] && fail "no CMD_* references found in SKILL.md (pattern may be broken)"
+[ "${#CMD_REFS[@]}" -eq 0 ] && fail "no CMD_* references found in ZENITH.md (pattern may be broken)"
 
 # ---------------------------------------------------------------------------
 # Check 2: Every INTENT_* in the intent list has a handler section
@@ -73,10 +73,10 @@ for intent in "${INTENT_LIST[@]}"; do
     fi
 done
 
-[ "${#INTENT_LIST[@]}" -eq 0 ] && fail "no INTENT_* entries found in SKILL.md (pattern may be broken)"
+[ "${#INTENT_LIST[@]}" -eq 0 ] && fail "no INTENT_* entries found in ZENITH.md (pattern may be broken)"
 
 # ---------------------------------------------------------------------------
-# Check 3: All references/*.md files referenced in SKILL.md exist
+# Check 3: All references/*.md files referenced in ZENITH.md exist
 # ---------------------------------------------------------------------------
 
 echo
@@ -91,14 +91,14 @@ for ref in "${TOOL_REFS[@]}"; do
     if [ -f "$REPO_ROOT/$ref" ]; then
         pass "$ref exists"
     else
-        fail "$ref referenced in SKILL.md but file not found"
+        fail "$ref referenced in ZENITH.md but file not found"
     fi
 done
 
-[ "${#TOOL_REFS[@]}" -eq 0 ] && fail "no references/*.md references found in SKILL.md (pattern may be broken)"
+[ "${#TOOL_REFS[@]}" -eq 0 ] && fail "no references/*.md references found in ZENITH.md (pattern may be broken)"
 
 # ---------------------------------------------------------------------------
-# Check 4: No deprecated placeholder names in SKILL.md or references/
+# Check 4: No deprecated placeholder names in ZENITH.md or references/
 # ---------------------------------------------------------------------------
 
 echo

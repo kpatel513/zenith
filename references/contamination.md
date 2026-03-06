@@ -83,6 +83,50 @@ ls -lh {file} | awk '{print $5}'
 
 If size > 50MB: `large file: {file} {size}`
 
+#### Root-Level Dependency Files
+
+Check if any changed file is a root-level dependency file — one that controls dependencies for the entire repo, not just one project folder.
+
+Patterns (filename at repo root, i.e., no `/` prefix in the path):
+- `requirements.txt`
+- `pyproject.toml`
+- `setup.py`
+- `setup.cfg`
+- `Pipfile`
+- `Pipfile.lock`
+- `package.json`
+- `yarn.lock`
+- `poetry.lock`
+
+If matched: `root dependency: {file}`
+
+These files affect all projects in the repo. A version change or added package can break builds for every other team. Always flag — even if the file is inside `{project_folder}`.
+
+#### Shared Path Risk
+
+Check if any changed file lives under a path that is conventionally shared across teams in a monorepo.
+
+Path starts with any of (at repo root, no preceding folder):
+- `common/`
+- `shared/`
+- `utils/`
+- `lib/`
+- `core/`
+- `infra/`
+- `scripts/`
+- `.github/`
+- `docker/`
+
+Or filename is any of:
+- `Makefile`
+- `Dockerfile`
+- `.pre-commit-config.yaml`
+- `.gitignore` (root-level only)
+
+If matched: `shared path: {file}`
+
+These paths are typically owned by platform or infra teams, or used by multiple project folders. Changes here can silently affect colleagues who never see your PR diff. Always surface — even if the file appears to be inside `{project_folder}`.
+
 #### ML Output Risk
 Check path components and extension against patterns:
 
@@ -162,6 +206,8 @@ outside {project_folder}/:
 hardcoded path:  src/model.py line 42
 large file:      outputs/model.ckpt 2.1GB
 ml output:       outputs/model.ckpt
+root dependency: requirements.txt
+shared path:     common/utils.py
 ```
 
 If nothing outside project folder and no flags:
@@ -206,3 +252,11 @@ Ask: "This may not belong in git. Continue? [y/n]"
 ### ML outputs detected
 Warn: "ML output file detected: {file}"
 Suggest: "Add to .gitignore? [y/n]"
+
+### Root-level dependency file detected
+Warn: "This file controls dependencies for the whole repo — changes here can break other teams"
+Ask: "Confirm you've reviewed the version changes? [y/n]"
+
+### Shared path detected
+Warn: "This path is likely shared across teams — verify with the owner before committing"
+Ask: "Continue anyway? [y/n]"

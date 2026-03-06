@@ -42,6 +42,8 @@
 - Check each file for credentials patterns (.env, *secret*, *.key, *.pem)
 - Check each file size (flag if >50MB)
 - Check each file for ML output patterns (*.ckpt, *.pt, /outputs/, /checkpoints/)
+- Check each file for root-level dependency files (requirements.txt, pyproject.toml, setup.py, setup.cfg, Pipfile, package.json) — flag even if inside project_folder
+- Check each file for shared monorepo paths (common/, shared/, lib/, core/, infra/, scripts/ at root; Makefile, Dockerfile, .github/) — flag for cross-team impact
 - Display all findings or "clean" status
 
 ### FR-6: Show Staged (INTENT_SHOW_STAGED)
@@ -56,6 +58,7 @@
 - Prompt for include/exclude if external files found
 - Prompt for commit message if not provided
 - Stage files (scoped or all)
+- Check staged file count: if >50 files, show breakdown by folder and ask to confirm before proceeding
 - Display what will be committed
 - Confirm before committing
 - Commit and display result
@@ -138,6 +141,7 @@
 - Run contamination check
 - Prompt for commit message if uncommitted changes exist
 - Stage files (scoped to project_folder, or all if user chose include)
+- Check staged file count: if >50 files, show breakdown by folder and ask to confirm before proceeding
 - Show staged diff and confirm before committing
 - Commit
 - Fetch latest
@@ -163,72 +167,6 @@
 - Confirm before committing
 - Push to existing branch
 - Display PR URL
-
-### FR-21: Status (INTENT_STATUS)
-- Fetch latest
-- Display current branch, how far ahead/behind base branch, uncommitted changes count, staged file count, stash count, and open PR status in one view
-- Suggest the most relevant next action based on current state
-
-### FR-22: Draft PR (INTENT_DRAFT_PR)
-- Same flow as FR-18 (Push) but always opens PR as draft
-- Draft PR starts CI without notifying reviewers
-- After push, run `gh pr create --draft`
-
-### FR-23: Fix CI (INTENT_FIX_CI)
-- Require open PR on current branch
-- Fetch recent CI run list via `gh run list`
-- Find most recent failed run and show failed step output via `gh run view --log-failed`
-- Link to PR and failed run on GitHub
-
-### FR-24: Clean Up Branches (INTENT_CLEANUP_BRANCHES)
-- Fetch and prune remote refs
-- Find merged branches via git ancestry (`git branch --merged`) union GitHub PR history (`gh pr list --state merged`)
-- Filter to branches owned by current user
-- Show list with last commit hash before deleting (for recoverability)
-- Confirm before deleting; support selecting a subset
-- Delete local branch with `-D`; attempt remote delete (silently skip if already deleted by GitHub)
-
-### FR-25: Clean History (INTENT_CLEAN_HISTORY)
-- Block if uncommitted changes
-- Detect merge commits between current branch and base branch (`git log --merges`)
-- If none: report history is already clean
-- Show merge commits that will be removed and user commits that will be kept
-- Rebase onto base branch to remove merge commits
-- Apply three-tier conflict resolution
-- Force-push with `--force-with-lease` if open PR exists
-
-### FR-26: Move Commits (INTENT_MOVE_COMMITS)
-- Block if uncommitted changes
-- Block if on base branch
-- Show commits ahead of base branch
-- Prompt for which commits to move and target branch name
-- Cherry-pick selected commits onto target branch (new or existing)
-- Apply three-tier conflict resolution during cherry-pick
-- Offer to remove commits from source branch after moving
-
-### FR-27: Unstash (INTENT_UNSTASH)
-- List all stashes
-- If none: report no stashes
-- If one: use it automatically
-- If multiple: show numbered list, prompt for selection
-- Restore selected stash via `git stash pop`
-- Display files restored
-
-### FR-28: Fix Conflict (INTENT_FIX_CONFLICT)
-- Require open PR on current branch
-- Block if uncommitted changes
-- Merge base branch locally to surface conflicts
-- Apply three-tier conflict resolution (same rules as FR-12)
-- Push resolved state to update PR automatically
-
-### FR-29: Merge Complete (INTENT_MERGE_COMPLETE)
-- Detect merged PR for current branch via `gh pr list --state merged`
-- Rebase local branch onto base branch to incorporate the merge commit
-- Report 0 ahead / 0 behind when done
-
-### FR-30: Help (INTENT_HELP)
-- Display table of natural language phrases and corresponding actions
-- No technical jargon
 
 ### FR-22: Status (INTENT_STATUS)
 - Fetch latest from remote
@@ -279,6 +217,7 @@
 - Block if uncommitted changes
 - Merge base branch locally to surface conflicts
 - Apply three-tier conflict resolution (see FR-12)
+- For Tier 3 (substantive) resolutions: show the discarded version explicitly and require confirmation that it is safe to drop before proceeding
 - Push resolved merge commit to unblock PR
 
 ### FR-30: Merge Complete (INTENT_MERGE_COMPLETE)
@@ -321,6 +260,32 @@
 - End with clean summary or "fix required" summary
 - Never commit or stage files — this is a read-only check operation
 
+### FR-34: Gitignore Audit (INTENT_GITIGNORE_CHECK)
+- Detect which .gitignore files (root or per-folder) have changed
+- Extract newly added rules from the diff
+- Simulate effect of each new rule across the entire repo using `git check-ignore -v`
+- Group results by project folder to identify cross-team impact
+- Warn if any rule would silently ignore files outside the folder where the .gitignore lives
+- Show which rules are safely scoped and which have cross-folder reach
+- Require explicit confirmation before rules with cross-folder effect are committed
+
+### FR-35: Cherry-Pick (INTENT_CHERRY_PICK)
+- Block if uncommitted changes
+- Accept source branch and show recent commits from it
+- Show diff of selected commit scoped to project_folder before applying
+- Show files the commit touches outside project_folder (will not be applied) and warn
+- Execute `git cherry-pick` and apply three-tier conflict resolution
+- Run contamination check after clean apply
+- Block out-of-scope application if commit has no changes in project_folder and user declines
+
+### FR-36: Find Duplicates (INTENT_FIND_DUPLICATES)
+- Accept a keyword, class name, or function description from user
+- Search all .py (and configurable extension) files for matching filenames, class names, and function definitions
+- Search directory names for keyword match
+- Group results by project folder, excluding user's own project_folder
+- Report matches with folder path and match type (filename / class / function)
+- Surface matches before user builds, to prevent two implementations of the same thing landing in the repo
+
 ## Non-Functional Requirements
 
 ### NFR-1: Single Entry Point
@@ -353,6 +318,15 @@ Command execution should complete within 5 seconds for operations without user i
 ### NFR-10: Error Reporting
 All git command failures must show exact error output to user.
 
+### NFR-11: Detect Unexpected Commits on Base Branch
+When on base branch, Step 1 diagnostics must check for unpushed commits and surface a visible warning. Applies to S25 (automated tools committing directly to main without creating a branch).
+
+### NFR-12: Large Staged File Set Warning
+INTENT_SAVE and INTENT_PUSH must pause and display a per-folder breakdown when staged file count exceeds 50. Prevents auto-generated or output files from reaching a PR unreviewed.
+
+### NFR-13: Conflict Discard Visibility
+After resolving a substantive (Tier 3) conflict, the discarded version must be shown explicitly and confirmed safe to drop before the commit proceeds. Silent loss of the correct version is not acceptable.
+
 ## External Dependencies
 
 - **Claude Code**: Runtime environment for slash command execution
@@ -380,7 +354,7 @@ Must work within Claude Code's tool execution model. No interactive prompts unsu
 .agent-config must be in .gitignore. Never committed.
 
 ### C-6: Read-Only Reference Documents
-Files in tools/ are specifications, not executable code. zenith.md reads and implements them.
+Files in references/ are specifications, not executable code. ZENITH.md reads and implements them.
 
 ## Success Criteria
 
@@ -392,3 +366,10 @@ Files in tools/ are specifications, not executable code. zenith.md reads and imp
 6. System provides clear next-action guidance after every operation
 7. Setup is idempotent and updates are automatic
 8. All git errors show exact output for user troubleshooting
+9. System detects when automated tools (e.g. Claude Code) commit directly to base branch and surfaces a recovery path
+10. System pauses and requires review when staged file count is unusually large (>50 files)
+11. System flags root-level dependency files and shared monorepo paths regardless of project_folder scope
+12. System prevents silent discard of correct conflict resolution by showing the dropped version before committing
+13. Users can audit .gitignore changes for cross-team scope impact before committing
+14. Users can safely cherry-pick from other branches with scoped preview and contamination check
+15. Users can search the repo for duplicate implementations before building something that already exists

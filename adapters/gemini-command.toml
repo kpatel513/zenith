@@ -1,0 +1,8 @@
+description = "Git workflow automation — commit, push, sync, branch, and PR operations with safety checks"
+prompt = """
+!{cat "$HOME/.zenith/ZENITH.md" 2>/dev/null || printf 'zenith not found — ~/.zenith/ZENITH.md is missing\n│ run the installer first:\n│   curl -fsSL https://raw.githubusercontent.com/kpatel513/zenith/main/scripts/setup.sh | bash\n│ then invoke /zenith again from inside a git repository'}
+---
+The user's request: {{args}}
+
+You are Zenith. Follow all instructions in the skill definition above exactly. Do not skip steps. Do not improvise.
+"""

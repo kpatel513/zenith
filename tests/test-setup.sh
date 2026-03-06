@@ -33,6 +33,9 @@ make_source_repo() {
     git init "$dir" --quiet
     mkdir -p "$dir/adapters"
     touch "$dir/adapters/claude-command.md"
+    mkdir -p "$dir/adapters/codex-skill"
+    touch "$dir/adapters/codex-skill/SKILL.md"
+    touch "$dir/adapters/gemini-command.toml"
     mkdir -p "$dir/.cursor/rules"
     touch "$dir/.cursor/rules/zenith.mdc"
     mkdir -p "$dir/scripts"
@@ -48,14 +51,19 @@ run_setup() {
     # $2 = ZENITH_REPO override
     # $3 = GitHub username
     # $4 = cursor install answer (y/n, default n)
-    # GLOBAL_COMMANDS_DIR is set to a subdir of ZENITH_DIR to avoid touching ~/.claude/commands
-    # GLOBAL_CURSOR_RULES_DIR is set to a subdir of ZENITH_DIR to avoid touching ~/.cursor/rules
+    # $5 = codex install answer (y/n, default n)
+    # $6 = gemini install answer (y/n, default n)
+    # GLOBAL_*_DIR vars point to subdirs of ZENITH_DIR to avoid touching real system dirs
     # TTY=/dev/stdin lets tests inject input via heredoc instead of /dev/tty
     local cursor_ans="${4:-n}"
+    local codex_ans="${5:-n}"
+    local gemini_ans="${6:-n}"
     ZENITH_DIR="$1" ZENITH_REPO="$2" GLOBAL_COMMANDS_DIR="$1/global-commands" \
         GLOBAL_CURSOR_RULES_DIR="$1/cursor-rules" \
+        GLOBAL_CODEX_SKILLS_DIR="$1/codex-skills" \
+        GLOBAL_GEMINI_COMMANDS_DIR="$1/gemini-commands" \
         TTY=/dev/stdin bash "$REPO_ROOT/scripts/setup.sh" \
-        <<< "$(printf '%s\n%s\n' "$3" "$cursor_ans")" 2>/dev/null
+        <<< "$(printf '%s\n%s\n%s\n%s\n' "$3" "$cursor_ans" "$codex_ans" "$gemini_ans")" 2>/dev/null
 }
 
 # ---------------------------------------------------------------------------
@@ -245,6 +253,8 @@ test_symlink_repair() {
 
     # Re-run setup — should repair the symlink without prompting
     ZENITH_DIR="$zenith_dir" GLOBAL_COMMANDS_DIR="$zenith_dir/global-commands" \
+        GLOBAL_CODEX_SKILLS_DIR="$zenith_dir/codex-skills" \
+        GLOBAL_GEMINI_COMMANDS_DIR="$zenith_dir/gemini-commands" \
         bash "$REPO_ROOT/scripts/setup.sh" 2>/dev/null || true
 
     local target
@@ -254,6 +264,60 @@ test_symlink_repair() {
         || fail "stale symlink repaired to adapters/claude-command.md (got: $target)"
 
     rm -rf "$source_repo" "$zenith_dir" "$commands_dir"
+}
+
+# ---------------------------------------------------------------------------
+# Test: codex opt-in creates symlink; opt-out skips it
+# ---------------------------------------------------------------------------
+
+test_codex_install() {
+    echo
+    echo "test: codex opt-in creates symlink; opt-out skips"
+
+    local source_repo zenith_dir
+    source_repo=$(make_source_repo)
+    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
+
+    # opt-in: symlink should be created
+    run_setup "$zenith_dir" "$source_repo" "myuser" "n" "y"
+    assert_symlink "$zenith_dir/codex-skills/zenith" "codex skill symlink created on opt-in"
+    rm -rf "$zenith_dir"
+
+    # opt-out: symlink should not be created
+    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
+    run_setup "$zenith_dir" "$source_repo" "myuser" "n" "n"
+    [ ! -e "$zenith_dir/codex-skills/zenith" ] \
+        && pass "no codex skill symlink on opt-out" \
+        || fail "no codex skill symlink on opt-out"
+
+    rm -rf "$source_repo" "$zenith_dir"
+}
+
+# ---------------------------------------------------------------------------
+# Test: gemini opt-in creates symlink; opt-out skips it
+# ---------------------------------------------------------------------------
+
+test_gemini_install() {
+    echo
+    echo "test: gemini opt-in creates symlink; opt-out skips"
+
+    local source_repo zenith_dir
+    source_repo=$(make_source_repo)
+    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
+
+    # opt-in: symlink should be created
+    run_setup "$zenith_dir" "$source_repo" "myuser" "n" "n" "y"
+    assert_symlink "$zenith_dir/gemini-commands/zenith.toml" "gemini command symlink created on opt-in"
+    rm -rf "$zenith_dir"
+
+    # opt-out: symlink should not be created
+    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
+    run_setup "$zenith_dir" "$source_repo" "myuser" "n" "n" "n"
+    [ ! -e "$zenith_dir/gemini-commands/zenith.toml" ] \
+        && pass "no gemini command symlink on opt-out" \
+        || fail "no gemini command symlink on opt-out"
+
+    rm -rf "$source_repo" "$zenith_dir"
 }
 
 # ---------------------------------------------------------------------------
@@ -289,6 +353,8 @@ test_global_config_username
 test_no_repo_files_written
 test_symlink_target
 test_cursor_install
+test_codex_install
+test_gemini_install
 test_symlink_repair
 test_cron_uses_fetch_reset
 

@@ -14,6 +14,10 @@ TTY="${TTY:-/dev/tty}"
 GLOBAL_COMMANDS_DIR="${GLOBAL_COMMANDS_DIR:-$HOME/.claude/commands}"
 # Tests override this to avoid touching real ~/.cursor/rules
 GLOBAL_CURSOR_RULES_DIR="${GLOBAL_CURSOR_RULES_DIR:-$HOME/.cursor/rules}"
+# Tests override this to avoid touching real ~/.codex/skills
+GLOBAL_CODEX_SKILLS_DIR="${GLOBAL_CODEX_SKILLS_DIR:-$HOME/.codex/skills}"
+# Tests override this to avoid touching real ~/.gemini/commands
+GLOBAL_GEMINI_COMMANDS_DIR="${GLOBAL_GEMINI_COMMANDS_DIR:-$HOME/.gemini/commands}"
 
 echo "Zenith Setup"
 echo "============"
@@ -34,6 +38,26 @@ if [ -f "$ZENITH_DIR/.setup-complete" ]; then
     if crontab -l 2>/dev/null | grep -q "zenith.*git pull"; then
         (crontab -l 2>/dev/null | grep -v "zenith"; echo "$UPDATED_CRON") | crontab - 2>/dev/null && \
             echo "✓ Migrated cron job to robust update command" || true
+    fi
+    # Auto-install Codex skill if Codex is installed but Zenith skill is missing or stale
+    if [ -d "$HOME/.codex" ]; then
+        CODEX_SKILL_TARGET="$GLOBAL_CODEX_SKILLS_DIR/zenith"
+        CODEX_SKILL_SOURCE="$ZENITH_DIR/adapters/codex-skill"
+        if [ ! -L "$CODEX_SKILL_TARGET" ] || [ "$(readlink "$CODEX_SKILL_TARGET" 2>/dev/null)" != "$CODEX_SKILL_SOURCE" ]; then
+            mkdir -p "$GLOBAL_CODEX_SKILLS_DIR"
+            ln -sf "$CODEX_SKILL_SOURCE" "$CODEX_SKILL_TARGET"
+            echo "✓ Added Codex skill ($CODEX_SKILL_TARGET)"
+        fi
+    fi
+    # Auto-install Gemini command if Gemini CLI is installed but Zenith command is missing or stale
+    if [ -d "$HOME/.gemini" ]; then
+        GEMINI_CMD_TARGET="$GLOBAL_GEMINI_COMMANDS_DIR/zenith.toml"
+        GEMINI_CMD_SOURCE="$ZENITH_DIR/adapters/gemini-command.toml"
+        if [ ! -L "$GEMINI_CMD_TARGET" ] || [ "$(readlink "$GEMINI_CMD_TARGET" 2>/dev/null)" != "$GEMINI_CMD_SOURCE" ]; then
+            mkdir -p "$GLOBAL_GEMINI_COMMANDS_DIR"
+            ln -sf "$GEMINI_CMD_SOURCE" "$GEMINI_CMD_TARGET"
+            echo "✓ Added Gemini command ($GEMINI_CMD_TARGET)"
+        fi
     fi
     echo "Zenith already installed at $ZENITH_DIR"
     echo "To update, run: cd $ZENITH_DIR && git pull"
@@ -62,6 +86,8 @@ echo
 
 read -rp "GitHub username: " GITHUB_USERNAME <"$TTY"
 read -rp "Install Cursor rule? [y/N]: " INSTALL_CURSOR <"$TTY"
+read -rp "Install Codex skill? [y/N]: " INSTALL_CODEX <"$TTY"
+read -rp "Install Gemini command? [y/N]: " INSTALL_GEMINI <"$TTY"
 
 echo
 
@@ -87,6 +113,32 @@ if [[ "${INSTALL_CURSOR:-n}" =~ ^[Yy]$ ]]; then
         echo "✓ Symlinked (global — @zenith works from any Cursor session)"
     else
         echo "✓ Cursor rule already installed"
+    fi
+fi
+
+# Install Codex skill (global, opt-in)
+if [[ "${INSTALL_CODEX:-n}" =~ ^[Yy]$ ]]; then
+    CODEX_SKILL_TARGET="$GLOBAL_CODEX_SKILLS_DIR/zenith"
+    CODEX_SKILL_SOURCE="$ZENITH_DIR/adapters/codex-skill"
+    mkdir -p "$GLOBAL_CODEX_SKILLS_DIR"
+    if [ ! -L "$CODEX_SKILL_TARGET" ] && [ ! -e "$CODEX_SKILL_TARGET" ]; then
+        ln -s "$CODEX_SKILL_SOURCE" "$CODEX_SKILL_TARGET"
+        echo "✓ Symlinked (global — \$zenith works from any Codex session)"
+    else
+        echo "✓ Codex skill already installed"
+    fi
+fi
+
+# Install Gemini command (global, opt-in)
+if [[ "${INSTALL_GEMINI:-n}" =~ ^[Yy]$ ]]; then
+    GEMINI_CMD_TARGET="$GLOBAL_GEMINI_COMMANDS_DIR/zenith.toml"
+    GEMINI_CMD_SOURCE="$ZENITH_DIR/adapters/gemini-command.toml"
+    mkdir -p "$GLOBAL_GEMINI_COMMANDS_DIR"
+    if [ ! -L "$GEMINI_CMD_TARGET" ] && [ ! -f "$GEMINI_CMD_TARGET" ]; then
+        ln -s "$GEMINI_CMD_SOURCE" "$GEMINI_CMD_TARGET"
+        echo "✓ Symlinked (global — /zenith works from any Gemini CLI session)"
+    else
+        echo "✓ Gemini command already installed"
     fi
 fi
 
@@ -121,11 +173,13 @@ echo "Claude Code: /zenith <anything>"
 if [[ "${INSTALL_CURSOR:-n}" =~ ^[Yy]$ ]]; then
     echo "Cursor:      @zenith <anything>"
 fi
-echo
-if [[ "${INSTALL_CURSOR:-n}" =~ ^[Yy]$ ]]; then
-    echo "Open Claude Code or Cursor from inside any repo to get started."
-else
-    echo "Open Claude Code from inside any repo and run /zenith to get started."
+if [[ "${INSTALL_CODEX:-n}" =~ ^[Yy]$ ]]; then
+    echo "Codex CLI:   \$zenith <anything>"
 fi
+if [[ "${INSTALL_GEMINI:-n}" =~ ^[Yy]$ ]]; then
+    echo "Gemini CLI:  /zenith <anything>"
+fi
+echo
+echo "Open Claude Code from inside any repo and run /zenith to get started."
 echo "Zenith will configure itself for that repo on first use."
 echo

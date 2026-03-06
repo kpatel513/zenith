@@ -15,6 +15,8 @@ The canonical skill definition lives in `ZENITH.md` at the repo root. `adapters/
 ```
 ZENITH.md                              — Canonical skill definition. The file all runtimes execute.
 adapters/claude-command.md            — Claude Code adapter. Symlinked to ~/.claude/commands/zenith.md by setup.sh.
+adapters/codex-skill/SKILL.md         — Codex CLI adapter. Symlinked to ~/.codex/skills/zenith/ by setup.sh.
+adapters/gemini-command.toml          — Gemini CLI adapter. Symlinked to ~/.gemini/commands/zenith.toml by setup.sh.
 .cursor/rules/zenith.mdc              — Cursor adapter. Thin wrapper that reads ZENITH.md.
 references/safety.md                  — Non-negotiable safety rules.
 references/contamination.md           — Cross-folder contamination detection logic.

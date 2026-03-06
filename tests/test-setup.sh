@@ -31,10 +31,12 @@ make_source_repo() {
     local dir
     dir=$(mktemp -d)
     git init "$dir" --quiet
-    mkdir -p "$dir/.claude/commands"
-    touch "$dir/.claude/commands/zenith.md"
+    mkdir -p "$dir/adapters"
+    touch "$dir/adapters/claude-command.md"
     mkdir -p "$dir/.cursor/rules"
     touch "$dir/.cursor/rules/zenith.mdc"
+    mkdir -p "$dir/scripts"
+    touch "$dir/scripts/setup.sh"
     git -C "$dir" add . 2>/dev/null
     git -C "$dir" -c user.email="test@test.com" -c user.name="Test" \
         commit -m "init" --quiet
@@ -92,7 +94,8 @@ test_idempotent() {
     touch "$zenith_dir/.setup-complete"  # marker → simulates already installed
 
     local output exit_code
-    output=$(ZENITH_DIR="$zenith_dir" bash "$REPO_ROOT/scripts/setup.sh" 2>&1) || true
+    output=$(ZENITH_DIR="$zenith_dir" GLOBAL_COMMANDS_DIR="$zenith_dir/global-commands" \
+        bash "$REPO_ROOT/scripts/setup.sh" 2>&1) || true
     exit_code=$?
 
     assert_exit_zero   "$exit_code"                              "exits 0 when already installed"
@@ -221,6 +224,58 @@ test_cursor_install() {
 }
 
 # ---------------------------------------------------------------------------
+# Test: broken symlink is repaired on re-run (migration for pre-adapters/ installs)
+# ---------------------------------------------------------------------------
+
+test_symlink_repair() {
+    echo
+    echo "test: broken symlink repaired on re-run"
+
+    local source_repo zenith_dir commands_dir
+    source_repo=$(make_source_repo)
+    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
+    commands_dir=$(mktemp -d)
+
+    # Fresh install
+    run_setup "$zenith_dir" "$source_repo" "myuser"
+
+    # Simulate broken symlink from pre-adapters/ install: replace with a stale target
+    STALE_TARGET="$zenith_dir/.claude/commands/zenith.md"
+    ln -sf "$STALE_TARGET" "$zenith_dir/global-commands/zenith.md"
+
+    # Re-run setup — should repair the symlink without prompting
+    ZENITH_DIR="$zenith_dir" GLOBAL_COMMANDS_DIR="$zenith_dir/global-commands" \
+        bash "$REPO_ROOT/scripts/setup.sh" 2>/dev/null || true
+
+    local target
+    target=$(readlink "$zenith_dir/global-commands/zenith.md" 2>/dev/null || echo "")
+    echo "$target" | grep -q "adapters/claude-command.md" \
+        && pass "stale symlink repaired to adapters/claude-command.md" \
+        || fail "stale symlink repaired to adapters/claude-command.md (got: $target)"
+
+    rm -rf "$source_repo" "$zenith_dir" "$commands_dir"
+}
+
+# ---------------------------------------------------------------------------
+# Test: cron command uses fetch+reset, not git pull (robust against untracked files)
+# ---------------------------------------------------------------------------
+
+test_cron_uses_fetch_reset() {
+    echo
+    echo "test: cron command uses git fetch+reset not git pull"
+
+    grep -q "CRON_CMD=.*git fetch origin main" "$REPO_ROOT/scripts/setup.sh" \
+        && pass "cron command uses git fetch" \
+        || fail "cron command uses git fetch"
+    grep -q "CRON_CMD=.*git reset --hard origin/main" "$REPO_ROOT/scripts/setup.sh" \
+        && pass "cron command uses git reset --hard" \
+        || fail "cron command uses git reset --hard"
+    ! grep -q "CRON_CMD=.*git pull" "$REPO_ROOT/scripts/setup.sh" \
+        && pass "cron command does not use git pull" \
+        || fail "cron command does not use git pull"
+}
+
+# ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
 
@@ -234,6 +289,8 @@ test_global_config_username
 test_no_repo_files_written
 test_symlink_target
 test_cursor_install
+test_symlink_repair
+test_cron_uses_fetch_reset
 
 echo
 echo "results: $PASS passed, $FAIL failed"

@@ -100,9 +100,9 @@ Zenith reads repo state before acting. The orchestrator does not need to pass gi
 #### CHECK_SCOPE
 **Intent:** `INTENT_CHECK_SCOPE`
 **Trigger phrases:** `scope check`, `contamination check`, `did I touch outside my folder`
-**What it does:** Runs contamination detection — lists any changed files outside the user's `project_folder`.
+**What it does:** Runs contamination detection — lists changed files outside `project_folder`, flags hardcoded paths, credentials, ML outputs, large files, root-level dependency files (requirements.txt, pyproject.toml), and shared monorepo paths (common/, shared/, .github/, Makefile).
 **Preconditions:** None
-**Produces:** Read-only report. Flags out-of-scope files.
+**Produces:** Read-only report. Flags out-of-scope and risky files.
 **Confirmation required:** No
 **Destructive:** No
 
@@ -148,10 +148,10 @@ Zenith reads repo state before acting. The orchestrator does not need to pass gi
 #### SAVE
 **Intent:** `INTENT_SAVE`
 **Trigger phrases:** `save`, `commit`, `checkpoint`, `save my work`
-**What it does:** Runs contamination check, stages files in project folder, shows preview, commits with a generated or provided message.
+**What it does:** Runs contamination check, stages files in project folder, shows preview, commits with a generated or provided message. Pauses for review if more than 50 files are staged (auto-generated file protection).
 **Preconditions:** Uncommitted changes exist (S5 or S6)
 **Produces:** A new commit on the current branch
-**Confirmation required:** Yes — shows staged files before committing
+**Confirmation required:** Yes — shows staged files before committing; extra confirmation if >50 files staged
 **Destructive:** No
 
 ---
@@ -226,14 +226,25 @@ Zenith reads repo state before acting. The orchestrator does not need to pass gi
 
 ---
 
+#### CHERRY_PICK
+**Intent:** `INTENT_CHERRY_PICK`
+**Trigger phrases:** `cherry-pick a fix`, `grab a commit from another branch`, `borrow a commit`, `pick a specific commit`
+**What it does:** Shows recent commits on a specified source branch, previews the selected commit scoped to `project_folder`, applies it via `git cherry-pick`, runs contamination check after apply. Warns if the commit has no changes in `project_folder`. Applies three-tier conflict resolution if conflicts arise.
+**Preconditions:** Clean working tree; source branch specified
+**Produces:** Selected commit applied to current branch
+**Confirmation required:** Yes — shows diff preview scoped to project_folder before applying
+**Destructive:** No
+
+---
+
 #### FIX_CONFLICT
 **Intent:** `INTENT_FIX_CONFLICT`
 **Trigger phrases:** `PR has conflicts`, `merge conflict on GitHub`, `can't merge PR`
-**What it does:** Fetches base branch, rebases current branch onto it, walks through conflict resolution, force-pushes to update the PR.
+**What it does:** Merges base branch locally to surface conflicts, walks through three-tier conflict resolution (Tier 1: stop if outside project_folder; Tier 2: auto-resolve mechanical; Tier 3: show both versions, ask user). For Tier 3 resolutions, explicitly shows the discarded version and requires confirmation it is safe to drop before committing.
 **Preconditions:** Open PR exists with merge conflicts
-**Produces:** Conflicts resolved, branch force-pushed, PR becomes mergeable
-**Confirmation required:** Yes
-**Destructive:** Rewrites branch history (force push)
+**Produces:** Conflicts resolved, branch pushed, PR becomes mergeable
+**Confirmation required:** Yes — and explicit confirmation before discarding any version in a substantive conflict
+**Destructive:** Rewrites branch history (merge commit)
 
 ---
 
@@ -244,10 +255,10 @@ Zenith reads repo state before acting. The orchestrator does not need to pass gi
 #### PUSH
 **Intent:** `INTENT_PUSH`
 **Trigger phrases:** `push`, `push my work`, `create PR`, `open PR`, `ship it`
-**What it does:** Full workflow — contamination check → stage → commit → fetch → sync (rebase if no open PR, merge if open PR exists) → push → create PR with auto-generated title and body.
+**What it does:** Full workflow — contamination check → stage → commit → fetch → sync (rebase if no open PR, merge if open PR exists) → push → create PR with auto-generated title and body. Pauses for review if more than 50 files are staged.
 **Preconditions:** On a feature branch (not base branch). Has uncommitted changes or unpushed commits.
 **Produces:** Commit, push, and GitHub PR created or updated
-**Confirmation required:** Yes — shows staged files and PR details before executing
+**Confirmation required:** Yes — shows staged files and PR details before executing; extra confirmation if >50 files staged
 **Destructive:** No (uses `--force-with-lease` only if rebase occurred)
 **Note:** Will not push directly to base branch under any circumstances
 
@@ -382,6 +393,70 @@ Zenith reads repo state before acting. The orchestrator does not need to pass gi
 
 ---
 
+### Code Review
+
+---
+
+#### REVIEW_PR
+**Intent:** `INTENT_REVIEW_PR`
+**Trigger phrases:** `review my PR`, `self-review`, `review my changes`, `review PR 123`, `review #42`
+**What it does:** Three-pass review using Layers 1–6 (git history, docs up to 300 lines, per-folder README, ADR content, project config, code structure). Pass 1: plain English summary of what the PR does. Pass 2: signals (scope, volatile/fragile files, duplicate symbols, config violations, structure issues). Pass 3: architect review — finds structural issues that compound over time, states concerns in one sentence per field, ends with a directive and verdict (MERGE / MERGE AFTER FIXES / REDESIGN NEEDED).
+**Preconditions:** `gh` CLI authenticated; on a feature branch (author mode) or PR number provided (reviewer mode)
+**Produces:** Read-only review report — not posted to GitHub
+**Confirmation required:** No
+**Destructive:** No
+**Note:** Pass 3 sees only the raw diff — it never reads Pass 1 or Pass 2 output
+
+---
+
+#### REVIEW_PR_DEEP
+**Intent:** `INTENT_REVIEW_PR` (deep tier)
+**Trigger phrases:** `deep review my PR`, `full review`, `thorough review`, `architect review`, `deep review PR 123`
+**What it does:** Same three-pass review as REVIEW_PR with Layers 1–6, plus Layers 7–9: recent merged PRs cross-referenced against touched files (PR history signals), open PRs touching the same files (concurrency/conflict risk), and recurring themes from past review comments on matched PRs (reviewer pattern signals). Use for high-traffic or contested areas of the codebase.
+**Preconditions:** Same as REVIEW_PR; `gh` CLI authenticated for Layers 7–9
+**Produces:** Read-only review report with full context — not posted to GitHub
+**Confirmation required:** No
+**Destructive:** No
+
+---
+
+#### RUN_CHECKS
+**Intent:** `INTENT_RUN_CHECKS`
+**Trigger phrases:** `run checks`, `check my code`, `run pre-commit`, `lint my changes`, `pre-commit check`, `run hooks`
+**What it does:** Runs pre-commit hooks against changed files in `project_folder` only (not `--all-files`). Reports per-hook pass/fail with failure detail. Distinguishes auto-fixed files (hooks that modified files in place) from manual-fix failures.
+**Preconditions:** `pre-commit` installed; `.pre-commit-config.yaml` present at repo root
+**Produces:** Per-hook pass/fail report; list of auto-fixed files if any
+**Confirmation required:** No
+**Destructive:** No — read-only except for auto-fixes applied by hooks themselves
+
+---
+
+### Monorepo Safety
+
+---
+
+#### GITIGNORE_CHECK
+**Intent:** `INTENT_GITIGNORE_CHECK`
+**Trigger phrases:** `check gitignore`, `gitignore is wrong`, `gitignore breaking things`, `audit gitignore`, `gitignore scope`
+**What it does:** Detects newly added `.gitignore` rules from the current diff, simulates their effect across the repo using `git check-ignore -v`, groups matches by project folder. Warns if any new rule would silently ignore files outside the folder where the `.gitignore` lives (cross-team scope).
+**Preconditions:** A `.gitignore` file must be modified in the current working tree or staged
+**Produces:** Read-only report of new rules and their cross-folder effect; confirmation gate if cross-folder impact found
+**Confirmation required:** Yes if cross-folder impact detected
+**Destructive:** No
+
+---
+
+#### FIND_DUPLICATES
+**Intent:** `INTENT_FIND_DUPLICATES`
+**Trigger phrases:** `check for duplicates`, `is there already a data loader`, `find similar implementations`, `duplicate detection`
+**What it does:** Accepts a keyword or description, searches all files in the repo for matching filenames, class names, and function definitions. Groups results by project folder, excludes the user's own `project_folder`. Surfaces matches before the user builds, to prevent two implementations of the same thing landing in the repo.
+**Preconditions:** None
+**Produces:** Read-only list of files and symbols matching the keyword, grouped by team folder
+**Confirmation required:** No
+**Destructive:** No
+
+---
+
 ## Hard Constraints for Orchestrators
 
 These are non-negotiable. Do not attempt to work around them via prompt engineering:
@@ -402,3 +477,6 @@ These are non-negotiable. Do not attempt to work around them via prompt engineer
 - **Confirmation gates are not bypassable.** Zenith will always ask before destructive operations. Design orchestration flows to handle `[y/n]` prompts.
 - **One intent per invocation.** Zenith handles one operation per call. Chain invocations for multi-step flows (e.g., SAVE → PUSH as two separate calls).
 - **Stacked PR context is auto-detected.** Zenith reads `branch.{name}.zenith-parent` git config and GitHub PR base automatically — no need to pass stack context explicitly.
+- **Base branch commit warning.** If the orchestrator detects Zenith has been used to commit directly to the base branch (e.g. Claude Code auto-committed), invoke `MOVE_COMMITS` to recover.
+- **Two-tier review.** Pass `deep review` in the request to activate Layers 7–9 (PR history, open PR conflicts, reviewer patterns). Standard `review` uses Layers 1–6 only and makes no extra GitHub API calls.
+- **FIND_DUPLICATES before building.** For orchestration flows that scaffold new modules or data loaders, invoke FIND_DUPLICATES first to surface existing implementations across team folders.

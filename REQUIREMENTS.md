@@ -235,21 +235,33 @@
 - INTENT_MERGE_COMPLETE: handle three cases — own PR merged, parent PR merged, standard
 - PR retargeting: update PR base with gh pr edit --base after parent is merged
 
-### FR-32: Adversarial PR Review (INTENT_REVIEW_PR)
+### FR-32: PR Review (INTENT_REVIEW_PR)
 - Accept two modes from natural language: author mode (current branch) and reviewer mode (specific PR number)
 - Author mode: block if on base branch; collect diff from open PR if one exists, otherwise diff against base branch
 - Reviewer mode: fetch PR metadata, diff, and CI check status via GitHub CLI
-- Three-pass review: Pass 1 (benevolent summary), Pass 2 (signals), Pass 3 (adversarial, isolated from prior passes)
+- Three-pass review: Pass 1 (benevolent summary), Pass 2 (signals), Pass 3 (architect review, isolated from prior passes)
 - Pass 3 sees only the raw diff — must not reference Pass 1 or Pass 2 output
-- Pass 3 persona: principal engineer, default verdict REJECT, assumes junior author
-- Every concern in Pass 3 must include all four fields: line citation, failure scenario, alternative, question for author
-- Pass 3 must check all eight explicit items: right problem vs symptom, failure recovery, coupling, simpler path, worst-case data/load, readability, changeability in 6 months, hidden assumptions
-- Signals layer (Pass 2): scope check (contamination for author, logical area for reviewer), redundancy scan (git grep for new symbols), history volatility (>10 commits/year), fragility (revert/hotfix commits in file history)
-- Context tiering: git history always; README head and ADR listing if present; `.zenith-context` if present — all optional, no error if absent
-- `.zenith-context`: team-maintained file committed to repo root; contains operational constraints, failure patterns, architecture rules, existing utilities, critical paths
-- Output: fixed-format block with reviewing header, CI status, three labeled sections (what it does / signals / concerns), biggest concern verdict
+- Pass 3 persona: senior architect, 15+ years — precise and direct, not adversarial; surfaces structural issues that compound over time; ignores style and minor issues
+- Every concern in Pass 3 must include all four fields, each exactly one sentence: line citation, failure scenario, alternative, question for author
+- Pass 3 must check all eleven explicit items: right problem vs symptom, failure recovery, coupling, simpler path, worst-case data/load, readability, changeability in 6 months, hidden assumptions, correct abstraction level, correct system layer, complexity proportional to value delivered
+- Pass 3 output ends with a single directive ("Before merging: [imperative]") and one of three verdicts: MERGE / MERGE AFTER FIXES / REDESIGN NEEDED
+- Signals layer (Pass 2) covers nine dimensions: scope, volatile files, fragile files, duplicate symbols, PR history on touched files, open PRs on same files, recurring reviewer patterns, config signals, structure signals
+- Two review tiers selected by natural language:
+  - Standard tier (`review my PR`, `review PR 123`): Layers 1–6 only — fast, no extra gh API calls
+  - Deep tier (`deep review my PR`, `deep review PR 123`, or any request containing "deep", "full", "thorough", "architect"): Layers 1–9
+- Context layers:
+  - Layer 1: git commit history per file (volatility, fragility) — always
+  - Layer 2: redundancy scan (git grep for new symbols) — always
+  - Layer 3: docs — README (300 lines), per-folder README, ARCHITECTURE.md, CONTRIBUTING.md, ADR content (5 most recent) — always
+  - Layer 4: .zenith-context if present — always
+  - Layer 5: project config — pyproject.toml, requirements.txt, CI pipeline, linting config — always
+  - Layer 6: code structure — module map of project_folder, __init__.py of touched packages — always
+  - Layer 7: recent merged PRs cross-referenced against touched files (last 20 PRs) — **deep tier only**
+  - Layer 8: open PRs touching same files — **deep tier only**
+  - Layer 9: review comments from matched past PRs (capped at 3 most recent matches) — **deep tier only**
+- Header must display which tier is active so the user knows the context level
+- All layers are optional — missing files, absent gh CLI, or no PR history must not block the review
 - No GitHub posting — terminal output only
-- Degrade gracefully: missing `.zenith-context`, missing README, or absent CI checks must not block the review
 
 ### FR-33: Pre-Commit Checks (INTENT_RUN_CHECKS)
 - Run pre-commit hooks against changed files in {project_folder} only (not --all-files)
@@ -327,6 +339,15 @@ INTENT_SAVE and INTENT_PUSH must pause and display a per-folder breakdown when s
 ### NFR-13: Conflict Discard Visibility
 After resolving a substantive (Tier 3) conflict, the discarded version must be shown explicitly and confirmed safe to drop before the commit proceeds. Silent loss of the correct version is not acceptable.
 
+### NFR-14: PR Review Context Completeness
+Before any review pass runs, all applicable context layers must be attempted (Layers 1–6 for standard tier, Layers 1–9 for deep tier). The review header must display which tier is active. A standard-tier review that runs on git history alone (no config, no docs) must be flagged as low-context.
+
+### NFR-15: PR Review Concern Brevity
+Every concern raised in Pass 3 must be expressible in four single-sentence fields. If a concern cannot be stated in one sentence per field, it must be rewritten until it can. Verbose or hedged concerns are not acceptable output.
+
+### NFR-16: PR Review Verdict Actionability
+The three verdict values (MERGE / MERGE AFTER FIXES / REDESIGN NEEDED) must map to unambiguous actions. MERGE means no blocking issues. MERGE AFTER FIXES means specific named issues must be addressed. REDESIGN NEEDED means the approach itself is wrong and the implementation is secondary.
+
 ## External Dependencies
 
 - **Claude Code**: Runtime environment for slash command execution
@@ -373,3 +394,6 @@ Files in references/ are specifications, not executable code. ZENITH.md reads an
 13. Users can audit .gitignore changes for cross-team scope impact before committing
 14. Users can safely cherry-pick from other branches with scoped preview and contamination check
 15. Users can search the repo for duplicate implementations before building something that already exists
+16. PR review gathers context from nine layers (git history, docs, config, code structure, PR history, open PRs, reviewer patterns) before making any finding
+17. PR review concerns are stated precisely in one sentence per field — no hedging, no padding
+18. PR review verdict maps unambiguously to one of three actions: merge as-is, fix specific issues, redesign the approach

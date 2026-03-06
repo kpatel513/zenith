@@ -21,6 +21,20 @@ echo
 
 # Check if already installed (marker written at end of successful setup)
 if [ -f "$ZENITH_DIR/.setup-complete" ]; then
+    # Repair symlink if broken or pointing to old path (handles repo restructuring migrations)
+    GLOBAL_SYMLINK="$GLOBAL_COMMANDS_DIR/zenith.md"
+    CORRECT_TARGET="$ZENITH_DIR/adapters/claude-command.md"
+    if [ ! -L "$GLOBAL_SYMLINK" ] || [ "$(readlink "$GLOBAL_SYMLINK" 2>/dev/null)" != "$CORRECT_TARGET" ]; then
+        mkdir -p "$GLOBAL_COMMANDS_DIR"
+        ln -sf "$CORRECT_TARGET" "$GLOBAL_SYMLINK"
+        echo "✓ Repaired /zenith symlink"
+    fi
+    # Migrate cron job from git pull to fetch+reset (git pull fails silently on untracked files)
+    UPDATED_CRON="0 9 * * * cd $ZENITH_DIR && git fetch origin main --quiet && git reset --hard origin/main --quiet && bash $ZENITH_DIR/scripts/setup.sh 2>/dev/null"
+    if crontab -l 2>/dev/null | grep -q "zenith.*git pull"; then
+        (crontab -l 2>/dev/null | grep -v "zenith"; echo "$UPDATED_CRON") | crontab - 2>/dev/null && \
+            echo "✓ Migrated cron job to robust update command" || true
+    fi
     echo "Zenith already installed at $ZENITH_DIR"
     echo "To update, run: cd $ZENITH_DIR && git pull"
     exit 0
@@ -87,7 +101,7 @@ echo "✓ Written to $GLOBAL_CONFIG"
 
 # Install cron job for automatic updates
 echo "Installing automatic update cron job..."
-CRON_CMD="0 9 * * * cd $ZENITH_DIR && git pull origin main --quiet"
+CRON_CMD="0 9 * * * cd $ZENITH_DIR && git fetch origin main --quiet && git reset --hard origin/main --quiet && bash $ZENITH_DIR/scripts/setup.sh 2>/dev/null"
 (crontab -l 2>/dev/null | grep -v "zenith"; echo "$CRON_CMD") | crontab - 2>/dev/null || {
     echo "Warning: Could not install cron job. You can add it manually:"
     echo "$CRON_CMD"

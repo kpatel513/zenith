@@ -131,6 +131,22 @@ fi
 
 `{parent_branch}` is now resolved. When `{parent_branch}` = `{base_branch}`, the branch is not stacked — all operations behave as before. When `{parent_branch}` ≠ `{base_branch}`, the branch is stacked — use `{parent_branch}` in place of `{base_branch}` for syncing, commit counting, and PR base.
 
+**Detect unexpected commits on base branch (S25):**
+
+If currently on `{base_branch}`:
+```bash
+git rev-list --count origin/{base_branch}..HEAD
+```
+
+If count > 0:
+```
+warning — {n} unpushed commit(s) directly on {base_branch}
+│ commits on {base_branch} are unusual — this branch is normally kept clean
+│ this can happen when an automated tool (e.g. Claude Code) commits without creating a branch first
+│ run /zenith move my commits to move them to a feature branch
+```
+Surface this warning before proceeding. Do not stop — let the user's intent determine next steps.
+
 ## Step 1b: Behind-Main Detection and Auto-Sync
 
 **Run this immediately after diagnostics, before situation detection or intent classification.**
@@ -389,6 +405,9 @@ Map user's request to ONE intent. Use both request text AND situation to classif
 - `INTENT_STACK_STATUS` - show my stack, stack overview, where is my PR in the stack, how many levels deep
 - `INTENT_REVIEW_PR` - review my PR, self-review, review my changes, review PR 123, review #42, adversarial review
 - `INTENT_RUN_CHECKS` - run checks, check my code, run pre-commit, lint my changes, pre-commit check, run hooks, check for issues
+- `INTENT_GITIGNORE_CHECK` - check gitignore, gitignore is wrong, gitignore breaking things, audit gitignore, gitignore scope
+- `INTENT_CHERRY_PICK` - cherry-pick a fix, grab a commit from another branch, borrow a commit, pick a specific commit
+- `INTENT_FIND_DUPLICATES` - check for duplicates, is there already a data loader, find similar implementations, duplicate detection
 - `INTENT_HELP` - help, what can you do, what commands exist
 - `INTENT_UNKNOWN` - cannot determine intent
 
@@ -427,6 +446,9 @@ unstash                   | Restore changes saved by a previous stash
 PR has conflicts          | Resolve merge conflict blocking your PR
 show my stack             | Show the full stack: each branch, its PR status, and CI state
 run checks                | Run pre-commit hooks against changed files and report pass/fail per hook
+check gitignore           | Audit .gitignore changes for rules that silently break other teams' folders
+cherry-pick a fix         | Safely apply a specific commit from another branch into your folder
+find duplicates           | Search for similar implementations already in the repo
 help                      | Show this table
 ```
 
@@ -805,6 +827,25 @@ Execute:
 git add {project_folder}/          # CMD_STAGE_FILE (or . if include)
 git diff --cached --stat           # CMD_DIFF_CACHED_STAT
 ```
+
+Check staged file count:
+```bash
+git diff --cached --name-only | wc -l
+```
+
+If count > 50:
+```
+large commit — {n} files staged
+│ this is unusually large and may include auto-generated or output files
+│ breakdown by folder:
+│   {folder}/   {count} files
+│   {folder}/   {count} files
+│ run /zenith scope check for a full breakdown before continuing
+
+Continue with all {n} files? [y/n]
+```
+
+If no: stop. User should review and re-stage selectively.
 
 Print:
 ```
@@ -1359,6 +1400,25 @@ If uncommitted changes exist:
 git add {project_folder}/          # CMD_STAGE_FILE (or all if include)
 git diff --cached --stat           # CMD_DIFF_CACHED_STAT
 ```
+
+Check staged file count:
+```bash
+git diff --cached --name-only | wc -l
+```
+
+If count > 50:
+```
+large commit — {n} files staged
+│ this is unusually large and may include auto-generated or output files
+│ breakdown by folder:
+│   {folder}/   {count} files
+│   {folder}/   {count} files
+│ run /zenith scope check for a full breakdown before continuing
+
+Continue with all {n} files? [y/n]
+```
+
+If no: stop. User should review and re-stage selectively.
 
 Print:
 ```
@@ -2225,6 +2285,19 @@ Tier 2 (mechanical): auto-resolve, `git add {file}`, print:
 
 Tier 3 (substantive): show both versions, ask [y/i/e], `git add {file}`
 
+After the user selects a resolution for each Tier 3 file, show the discarded version explicitly and ask for confirmation before moving on:
+
+```
+discarded version — this content will not be in the commit
+│ {file}
+│   {discarded_lines}
+│ this is what was dropped — verify it does not contain logic you need
+
+Is the discarded version safe to drop? [y/n]
+```
+
+If no: stop. User should manually merge the needed logic before proceeding.
+
 After all conflicts resolved:
 ```bash
 git commit
@@ -2583,6 +2656,191 @@ If hooks failed without auto-fixing (no file modifications):
   ✗ fix required  {n} hook(s) failed — see details above
 ```
 next: "next: fix the issues above, then run /zenith run checks again before committing"
+
+### INTENT_GITIGNORE_CHECK
+
+Detect changes to any `.gitignore` file (root or per-folder):
+```bash
+git diff --name-only HEAD          # CMD_DIFF_NAME_ONLY
+git diff --name-only --cached      # CMD_DIFF_CACHED_NAME_ONLY
+```
+
+Filter results to files matching `*/.gitignore` or `.gitignore` at root.
+
+If no `.gitignore` files changed:
+```
+nothing to check — no .gitignore files changed
+│ run /zenith check gitignore after modifying a .gitignore file
+```
+Stop.
+
+For each changed `.gitignore`:
+```bash
+git diff HEAD -- {gitignore_file}
+```
+
+Extract newly added rules (lines starting with `+` that are not comments or blank).
+
+For each new rule, simulate its effect across the entire repo:
+```bash
+git check-ignore -v --no-index $(git ls-files) 2>/dev/null | grep "{rule_pattern}"
+```
+
+Group results by project folder. Identify rules that would ignore files outside the folder where the `.gitignore` lives.
+
+Print:
+```
+gitignore audit — {n} new rule(s) added in {gitignore_file}
+│ new rules:
+│   + {rule}
+│   + {rule}
+│
+│ effect outside this folder:
+│   {other_folder}/{file}   ← would be ignored by rule "{rule}"
+│   {other_folder}/{file}   ← would be ignored by rule "{rule}"
+│
+│ effect is scoped correctly (no cross-folder matches):
+│   ✓ {rule}
+```
+
+If cross-folder matches found:
+```
+scope warning — {n} rule(s) affect files outside {folder}/
+│ a .gitignore rule at {gitignore_file} will silently ignore files in another team's folder
+│ consider moving these rules to a per-folder .gitignore or using a more specific pattern
+
+Continue committing these rules? [y/n]
+```
+
+If no cross-folder matches:
+```
+  ✓ clean  all new rules are scoped to {folder}/ only
+```
+
+Next: "next: rules look safe — run /zenith save to commit, or adjust patterns if the scope looks wrong"
+
+### INTENT_CHERRY_PICK
+
+Check situation. If S5 or S6:
+```
+blocked — you have uncommitted changes
+│ save or discard them before cherry-picking
+│ run /zenith save or /zenith throw away changes
+```
+Stop.
+
+Ask: "Which branch has the commit you want to pick from?"
+
+```bash
+git fetch origin                   # CMD_FETCH_ORIGIN
+git log origin/{source_branch} --oneline -10 --format="%h %s — %an %ar"
+```
+
+Print:
+```
+recent commits on {source_branch} — pick one to apply here
+│ 1.  {hash} {message} — {author} {time}
+│ 2.  {hash} {message} — {author} {time}
+│ ...
+
+Which commit? (number or hash)
+```
+
+Show the diff of the selected commit scoped to `{project_folder}`:
+```bash
+git show {hash} -- {project_folder}/
+git show {hash} --stat
+```
+
+Print:
+```
+cherry-pick preview — what will be applied to your branch
+│ from      {source_branch} at {hash}
+│ message   {commit_message}
+│ author    {author}
+│
+│ files touching {project_folder}/:
+│   {file}   +{n} -{n}
+│
+│ files outside {project_folder}/ (will NOT be applied):
+│   {file}   +{n} -{n}
+```
+
+If the commit touches no files in `{project_folder}`:
+```
+scope mismatch — this commit has no changes in {project_folder}/
+│ all changes are in folders owned by other teams
+│ cherry-picking it would bring in out-of-scope changes
+
+Apply anyway? [y/n]
+```
+
+Execute:
+```bash
+git cherry-pick {hash}
+```
+
+If conflicts:
+Apply three-tier conflict resolution (same rules as INTENT_FIX_CONFLICT):
+- Tier 1 (file outside {project_folder}): block, contact owner
+- Tier 2 (mechanical): auto-resolve
+- Tier 3 (substantive): show both versions, confirm discard before proceeding
+
+If clean:
+```bash
+git log --oneline -1               # CMD_LAST_COMMIT_ONELINE
+```
+
+Print:
+```
+  ✓ cherry-picked  {hash}
+  message          {commit_message}
+  from             {source_branch}
+```
+
+Run contamination check silently. Surface any flags.
+
+Next: "next: run /zenith push to include this commit in your PR"
+
+### INTENT_FIND_DUPLICATES
+
+Ask: "What are you looking for? (e.g. 'scRNA data loader', 'image augmentation pipeline', 'metric logging helper')"
+
+Search by filename pattern:
+```bash
+find . -type f -name "*.py" | xargs grep -l "{keyword}" 2>/dev/null | grep -v __pycache__ | grep -v ".git"
+```
+
+Search by class/function name (if user provides one):
+```bash
+grep -r "class {keyword}\|def {keyword}" --include="*.py" -l .   # CMD_GREP_SYMBOL
+```
+
+Search by directory name:
+```bash
+find . -type d -name "*{keyword}*" | grep -v ".git"
+```
+
+Group results by project folder. Exclude the user's own `{project_folder}` from the match list (they already know about their own code).
+
+If no matches:
+```
+no duplicates found — nothing matching "{keyword}" outside {project_folder}/
+│ searched filenames, class names, and function names across the repo
+│ you appear to be the first to build this
+```
+
+If matches found:
+```
+possible duplicates — similar implementations found outside {project_folder}/
+│ {other_folder}/{file}   contains class/def "{keyword}"
+│ {other_folder}/{file}   filename matches "{keyword}"
+│
+│ review before building — one of these may already do what you need
+│ or coordinate with the owner to avoid two versions landing in the repo
+```
+
+Next: "next: review the matches above — if they overlap, coordinate with the owner before building your own version"
 
 ## Step 5: After Every Operation
 

@@ -305,8 +305,10 @@ You don't have to memorize exact phrases. Zenith understands intent.
 | `clean up branches` | Deletes your old merged branches |
 | `show my stack` | Shows every branch in your stack with PR status and CI state |
 | `run checks` | Runs pre-commit hooks against your changed files and reports pass/fail per hook |
-| `review my PR` | Three-pass adversarial review of your branch: plain summary, signals (scope/volatility/duplicates), then a principal-engineer rejection pass |
-| `review PR 123` | Same three-pass review for a teammate's PR — fetches the diff, runs all three passes |
+| `review my PR` | Three-pass review using git history, docs, config, and code structure (Layers 1–6) |
+| `deep review my PR` | Same review with full context: adds PR history, open PR conflicts, past reviewer patterns (Layers 1–9) |
+| `review PR 123` | Three-pass review for a teammate's PR (Layers 1–6) |
+| `deep review PR 123` | Full-context review for a teammate's PR (Layers 1–9) |
 | `check gitignore` | Audits .gitignore changes for rules that silently break other teams' folders |
 | `cherry-pick a fix` | Safely applies a specific commit from another branch, scoped to your folder with contamination check |
 | `find duplicates` | Searches the repo for similar filenames, classes, or functions before you build something that already exists |
@@ -342,36 +344,46 @@ Your PR on GitHub automatically updates to show the correct diff.
 
 Zenith runs a three-pass adversarial review — designed to behave like a skeptical principal engineer, not a helpful assistant. It works in two modes.
 
+**Two tiers:**
+
+`review` — standard tier, Layers 1–6. Fast. Uses git history, docs, project config, and code structure. Good for a quick pre-submit check.
+
+`deep review` — full context, Layers 1–9. Adds PR history on touched files, open PRs touching the same files, and recurring themes from past review comments. Use this before submitting work in a high-traffic or contested area of the codebase.
+
 **Author mode** — before you submit, while you're still on your branch:
 ```
 /zenith review my PR
-/zenith self-review
-/zenith review my changes
+/zenith deep review my PR
 ```
 
 **Reviewer mode** — when you've been assigned to review someone else's PR:
 ```
 /zenith review PR 123
-/zenith review #42
+/zenith deep review PR 123
 ```
 
 ### How the three passes work
 
 **Pass 1 — Benevolent.** What does this diff actually do? Zenith reads the raw diff, the commit messages, and the PR description and produces 3–5 plain English bullets. Facts, no opinions.
 
-**Pass 2 — Signals.** Automated checks against the codebase:
+**Pass 2 — Signals.** Automated checks across nine dimensions:
 - **Scope** — are all changed files inside your project folder, or did the PR accidentally touch something else?
 - **Volatile files** — files with more than 10 commits in the past year are flagged; bugs introduced here tend to be expensive
 - **Fragile files** — files that have had revert or hotfix commits are flagged with the history
 - **Duplicate symbols** — new functions or classes are grep'd against the whole codebase; if the same name already exists somewhere, it's surfaced
+- **PR history** — files that appeared in 3+ PRs in the past 60 days are flagged as actively evolving and higher integration risk
+- **Open PR conflicts** — other open PRs touching the same files are surfaced so you can coordinate before merging
+- **Reviewer patterns** — recurring themes from past review comments on these files are surfaced as known concerns for this area
+- **Config signals** — duplicate dependencies, untyped code where mypy runs, version pins broken by the change
+- **Structure signals** — code placed outside the established module layout, public API not exported in `__init__.py`
 
-**Pass 3 — Adversarial (isolated).** Pass 3 sees only the raw diff — it never reads Pass 1 or Pass 2 output. Persona: principal engineer, default verdict is REJECT, assumes junior author. Every concern it raises must have all four fields:
+**Pass 3 — Architect (isolated).** Pass 3 sees only the raw diff — it never reads Pass 1 or Pass 2 output. Persona: senior architect with 15+ years of experience. Not adversarial — precise. Finds the one or two structural issues that will compound over time and states them plainly, in one sentence each. Ignores style and minor issues. Every concern has all four fields, each exactly one sentence:
 - line citation
-- failure scenario (concrete: "when X under Y condition, result is Z")
-- alternative implementation
-- question the author must answer before merging
+- failure scenario ("when X under Y condition, result is Z")
+- alternative (what to do instead)
+- question (what the author must answer before merging)
 
-Pass 3 explicitly checks eight things: right problem vs. symptom, failure recovery, coupling introduced, simpler path available, worst-case load and data, readability for the next engineer, what it makes harder to change in 6 months, and hidden assumptions about callers or environment.
+Pass 3 explicitly checks eleven things: right problem vs. symptom, failure recovery, coupling introduced, simpler path available, worst-case load and data, readability for the next engineer, what it makes harder to change in 6 months, hidden assumptions about callers or environment, correct abstraction level (not over/under-engineered), whether this belongs at this layer of the system, and whether total complexity is proportional to value delivered.
 
 ### Team context file
 
@@ -395,7 +407,7 @@ A template is at `assets/.zenith-context.template`. Zenith checks every PR diff 
 ```
 reviewing — feature/add-rate-limiter
 │ CI: ✓  base: main  +84 -12
-│ 3-pass review: summary → signals → adversarial (pass 3 sees raw diff only)
+│ 3-pass review: summary → signals → architect (pass 3 sees raw diff only)
 
 ── what it does ──────────────────────────────────────────
 │ • Adds a token bucket rate limiter to the API gateway middleware
@@ -403,21 +415,25 @@ reviewing — feature/add-rate-limiter
 │ • Returns 429 with Retry-After header when limit is exceeded
 
 ── signals ───────────────────────────────────────────────
-│ scope     ✓ within team-api/
-│ volatile  src/middleware/auth.js — 18 commits in past year, 2 reverts
-│ duplicate RateLimiter already exists at src/utils/throttle.js
+│ scope      ✓ within team-api/
+│ volatile   src/middleware/auth.js — 18 commits in past year, 2 reverts
+│ duplicate  RateLimiter already exists at src/utils/throttle.js
+│ pr history src/middleware/auth.js appeared in PR #38 (12 days ago) and PR #35 (31 days ago)
+│ conflict   PR #41 (bob) also touches src/middleware/auth.js — coordinate before merging
+│ reviewer   recurring feedback on auth.js: "initialize clients at module load, not per-request"
+│ config     requirements.txt pins redis==4.5.1 — new redis.asyncio import requires 4.6+
 
 ── concerns ──────────────────────────────────────────────
-│ P1  line 47: Redis client initialized inside the middleware function
-│     failure:     new connection on every request under load — pool exhaustion
-│     alternative: initialize once at module load, pass as dependency
-│     question:    what's the expected RPS and how many middleware instances run concurrently?
+│ P1  src/middleware/auth.js line 47: Redis client initialized inside the middleware function.
+│     failure:     New connection on every request under load causes pool exhaustion.
+│     alternative: Initialize once at module load and inject as a dependency.
+│     question:    What is the expected RPS and how many middleware instances run concurrently?
 
-── biggest concern ───────────────────────────────────────
-│ The rate limiter is applied after auth, so a flood of unauthenticated
-│ requests bypasses it entirely. Protect the auth endpoint first.
+── directive ─────────────────────────────────────────────
+│ Before merging: move rate limiting before auth so unauthenticated request floods
+│ don't bypass it entirely.
 
-  verdict  NEEDS CHANGES
+  verdict  MERGE AFTER FIXES
 ```
 
 ---

@@ -403,7 +403,7 @@ Map user's request to ONE intent. Use both request text AND situation to classif
 - `INTENT_UNSTASH` - unstash, restore my stash, get my changes back
 - `INTENT_FIX_CONFLICT` - PR has conflicts, merge conflict on GitHub, can't merge PR
 - `INTENT_STACK_STATUS` - show my stack, stack overview, where is my PR in the stack, how many levels deep
-- `INTENT_REVIEW_PR` - review my PR, self-review, review my changes, review PR 123, review #42, adversarial review
+- `INTENT_REVIEW_PR` - review my PR, self-review, review my changes, review PR 123, review #42, adversarial review, deep review, full review, thorough review, architect review
 - `INTENT_RUN_CHECKS` - run checks, check my code, run pre-commit, lint my changes, pre-commit check, run hooks, check for issues
 - `INTENT_GITIGNORE_CHECK` - check gitignore, gitignore is wrong, gitignore breaking things, audit gitignore, gitignore scope
 - `INTENT_CHERRY_PICK` - cherry-pick a fix, grab a commit from another branch, borrow a commit, pick a specific commit
@@ -446,6 +446,10 @@ unstash                   | Restore changes saved by a previous stash
 PR has conflicts          | Resolve merge conflict blocking your PR
 show my stack             | Show the full stack: each branch, its PR status, and CI state
 run checks                | Run pre-commit hooks against changed files and report pass/fail per hook
+review my PR              | Three-pass review: summary → signals (Layers 1–6) → architect pass
+deep review my PR         | Same three passes with full context: adds PR history, open PR conflicts, past reviewer patterns
+review PR 123             | Three-pass review for a teammate's PR
+deep review PR 123        | Same with full context layers
 check gitignore           | Audit .gitignore changes for rules that silently break other teams' folders
 cherry-pick a fix         | Safely apply a specific commit from another branch into your folder
 find duplicates           | Search for similar implementations already in the repo
@@ -2391,9 +2395,17 @@ Next: guidance based on the dominant issue in the stack (merged > no PR > CI fai
 
 ### INTENT_REVIEW_PR
 
-Detect mode from user request:
+Detect review tier from user request:
+- "deep", "full", "thorough", or "architect" present in request → **deep tier** (Layers 1–9)
+- Otherwise → **standard tier** (Layers 1–6 only)
+
+Detect subject mode from user request:
 - PR number present (e.g. "review PR 123", "review #42") → **reviewer mode**
 - Otherwise (e.g. "review my PR", "self-review", "review my changes") → **author mode**
+
+Print tier at the start of the review header line so the user knows which context level is running:
+- Standard tier: `│ context: Layers 1–6 (git history, docs, config, structure)`
+- Deep tier: `│ context: Layers 1–9 (+ PR history, open PR conflicts, past reviewer patterns)`
 
 ── AUTHOR MODE ──
 
@@ -2459,14 +2471,87 @@ git grep -l "{symbol}"             # CMD_GREP_SYMBOL
 
 Layer 3 — docs (if present):
 ```bash
-head -60 README.md 2>/dev/null
-ls docs/adr/ 2>/dev/null | head -10
+# Root README — full content up to 300 lines (not just 60)
+head -300 README.md 2>/dev/null
+
+# Per-folder README — many monorepos document each project area separately
+head -200 {project_folder}/README.md 2>/dev/null
+
+# Architecture and design docs — read if present
+cat ARCHITECTURE.md 2>/dev/null
+cat CONTRIBUTING.md 2>/dev/null
+cat DESIGN.md 2>/dev/null
+
+# ADR content — read the 5 most recently modified ADRs, not just list filenames
+ls -t docs/adr/*.md 2>/dev/null | head -5 | while IFS= read -r adr; do
+    echo "=== $adr ===" && head -80 "$adr"
+done
 ```
 
 Layer 4 — .zenith-context (if present):
 ```bash
 cat "$REPO_ROOT/.zenith-context" 2>/dev/null
 ```
+
+Layer 5 — project configuration (if present):
+```bash
+# Dependencies and Python/Node version targets
+cat pyproject.toml 2>/dev/null
+cat requirements.txt 2>/dev/null
+cat setup.cfg 2>/dev/null
+cat package.json 2>/dev/null | head -40
+
+# CI pipeline — understand what tests and lints run on every PR
+ls .github/workflows/ 2>/dev/null
+head -80 .github/workflows/*.yml 2>/dev/null
+
+# Coding standards enforced by tooling
+cat ruff.toml .flake8 mypy.ini .pylintrc .eslintrc* 2>/dev/null
+```
+
+Use Layer 5 to inform review findings: if a PR adds a dependency already in requirements.txt, flag it. If CI runs `mypy` and the change introduces untyped functions, flag it. If `ruff` enforces a style the new code violates, flag it.
+
+Layer 6 — code structure (if present):
+```bash
+# Module map of the project folder — understand where things live
+find {project_folder} -type f -name "*.py" | grep -v __pycache__ | sort | head -40
+
+# Public API of touched modules — read __init__.py for each touched file's package
+# For each touched file {file}, read: dirname({file})/__init__.py
+cat $(dirname {touched_file})/__init__.py 2>/dev/null
+```
+
+Use Layer 6 to inform review findings: if a new function bypasses the public API declared in `__init__.py`, flag it. If the module map shows a patterns/ or utils/ directory that the new code duplicates, flag it.
+
+Layer 7 — recent PR history on touched files (**deep tier only**, if gh available):
+```bash
+# Find last 20 merged PRs, extract file lists
+gh pr list --repo {github_org}/{github_repo} --state merged --base {base_branch} \
+  --limit 20 --json number,title,author,mergedAt,files \
+  --jq '.[] | {number, title, author: .author.login, mergedAt, files: [.files[].path]}'
+```
+
+Cross-reference each PR's file list against the current PR's touched files. For each match, record PR number, title, author, and merge date. Surface as a signal: files that have appeared in multiple recent PRs are actively evolving and warrant extra scrutiny. If 3+ PRs touched the same file in 60 days, flag it explicitly in signals.
+
+Layer 8 — open PRs on same files (**deep tier only**, if gh available):
+```bash
+gh pr list --repo {github_org}/{github_repo} --state open \
+  --json number,title,author,files \
+  --jq '.[] | {number, title, author: .author.login, files: [.files[].path]}'
+```
+
+Cross-reference against current PR's touched files. Any open PR touching the same file is a merge conflict risk. Surface as a signal: "PR #{n} ({author}) also touches {file} — coordinate before merging."
+
+Layer 9 — review comment patterns on recently matched PRs (**deep tier only**, capped, if gh available):
+```bash
+# For each PR found in Layer 7 that touches the same files (cap at 3 most recent):
+gh api repos/{github_org}/{github_repo}/pulls/{number}/comments \
+  --jq '.[] | {path, body, line}'
+```
+
+Extract recurring themes from review comments on the matched PRs. If reviewers have flagged the same pattern (e.g. "missing error handling", "wrong abstraction level") more than once across matched PRs, surface it in signals as a known reviewer concern for this area. This makes the review aware of what the team has been pushing back on, not just what the code looks like today.
+
+**If standard tier:** skip Layers 7–9 entirely. Do not make any `gh pr list` calls beyond what is needed for subject mode detection.
 
 ── PASS 1: BENEVOLENT ──
 
@@ -2491,27 +2576,50 @@ History signals:
 - For each known failure pattern in [failure_patterns]: check if diff contains the same pattern.
 - If match found: flag with description and incident reference from the context file.
 
+Configuration signals (Layer 5, if present):
+- If PR adds a dependency already listed in requirements.txt / pyproject.toml: flag as duplicate dependency.
+- If CI config shows `mypy` runs and the diff introduces untyped functions: flag.
+- If linting config enforces a rule the new code visibly violates: flag with rule name.
+- If PR modifies a dependency version that is pinned in pyproject.toml: flag as potential breaking change for other teams.
+
+Structure signals (Layer 6, if present):
+- If a new function or class duplicates a pattern already visible in the module map: flag with the existing path.
+- If the diff adds a file outside the established module structure (e.g. in root when the project uses src/ layout): flag.
+- If a new public function is not exported in `__init__.py` but appears to be intended as part of the public API: flag.
+
+PR history signals (Layer 7, **deep tier only**, if present):
+- Files touched by 3 or more PRs in the past 60 days: flag as actively evolving — changes here have higher integration risk.
+
+Concurrency signals (Layer 8, **deep tier only**, if present):
+- Any open PR touching the same files: flag with PR number, author, and file overlap.
+
+Reviewer pattern signals (Layer 9, **deep tier only**, if present):
+- Recurring themes from past review comments on matched PRs: flag as known reviewer concern for this area.
+
 ── PASS 3: ADVERSARIAL (ISOLATED) ──
 
 Do not reference Pass 1 or Pass 2 output. Read only the raw diff.
 
-Persona: You are a principal engineer doing a final architecture gate. Your default verdict is REJECT. The PR must earn approval. Assume the author is junior until the code proves otherwise. You are not here to help — you are here to protect the codebase.
+Persona: You are a senior architect with 15+ years of experience. You have seen what happens when the wrong abstraction ships — the team lives with it for years. You are not adversarial, you are precise. You say exactly what you think and nothing more. You do not soften observations, hedge with "it could be argued", or explain things the author should already know. You find the one or two structural issues that will compound over time and state them plainly. You ignore style preferences and minor issues — those are what linters are for. If the code is sound, you say so and move on.
 
-For every concern found, provide all four fields:
-- line citation (specific line number from the diff)
-- failure scenario (concrete: "when X under Y condition, result is Z")
-- alternative (specific rewrite or different approach)
-- question for author (what they must answer before merging)
+For every concern found, provide all four fields. Each field must be one sentence — no more. If you cannot state it in one sentence, the concern is not well-understood:
+- line citation (file and line number from the diff)
+- failure scenario (one sentence: "when X under Y condition, result is Z")
+- alternative (one sentence: what to do instead)
+- question (one sentence: what the author must answer before this merges)
 
 Check explicitly against this list — do not skip items:
-- Is this solving the right problem, or a symptom?
-- What happens on failure? Is failure recoverable?
-- What coupling does this introduce that will hurt later?
-- Is there a simpler way to achieve the same outcome?
-- Worst-case load or data scenario — is it handled?
+- Is this solving the right problem, or treating a symptom of a deeper issue?
+- What happens on failure — is it recoverable, and does the caller know it failed?
+- What coupling does this introduce that will constrain future changes?
+- Is there a simpler path to the same outcome with less moving parts?
+- Worst-case load or data scenario — does the code degrade gracefully or fail hard?
 - Will the next engineer understand this without asking the author?
 - What does this make harder to change in 6 months?
-- Hidden assumptions about callers or environment?
+- Hidden assumptions about callers, environment, or ordering?
+- Is the abstraction level correct — not over-engineered for its scope, not under-engineered for its complexity?
+- Does this belong at this layer of the system, or is it solving the problem at the wrong level?
+- Is the total complexity (lines, moving parts, new concepts introduced) proportional to the value this change delivers?
 
 ── OUTPUT ──
 
@@ -2520,7 +2628,8 @@ Print this block. Author mode uses {current_branch}; reviewer mode uses PR #{pr_
 ```
 reviewing — {current_branch}  /  PR #{pr_number} — {title} ({author})
 │ CI: ✓/✗/…  base: {base_branch}  +{lines_added} -{lines_removed}
-│ 3-pass review: summary → signals → adversarial (pass 3 sees raw diff only)
+│ context: Layers 1–6  /  Layers 1–9 (deep)
+│ 3-pass review: summary → signals → architect (pass 3 sees raw diff only)
 
 ── what it does ──────────────────────────────────────────
 │ • [bullet 1]
@@ -2532,29 +2641,35 @@ reviewing — {current_branch}  /  PR #{pr_number} — {title} ({author})
 │ volatile   {file} — {n} commits in past year, {n} reverts/hotfixes
 │ duplicate  {symbol} already exists at {path}
 │ pattern    ⚠ matches known failure: [description] ([incident ref])
+│ pr history {file} appeared in PR #{n} ({n} days ago) and PR #{n} ({n} days ago) — actively evolving
+│ conflict   PR #{n} ({author}) also touches {file} — coordinate before merging
+│ reviewer   recurring feedback on {file}: "[theme from past review comments]"
+│ config     [finding from pyproject.toml / CI / linting config]
+│ structure  [finding from module map or __init__.py]
 
 ── concerns ──────────────────────────────────────────────
-│ P1  line {n}: [citation]
-│     failure:     [concrete scenario]
-│     alternative: [specific rewrite]
-│     question:    [what author must answer before merging]
+│ P1  {file} line {n}: [one-sentence citation]
+│     failure:     [one sentence: when X under Y, result is Z]
+│     alternative: [one sentence: what to do instead]
+│     question:    [one sentence: what the author must answer before merging]
 │
-│ P2  line {n}: [citation]
-│     failure:     [concrete scenario]
-│     alternative: [specific rewrite]
-│     question:    [what author must answer before merging]
+│ P2  {file} line {n}: [one-sentence citation]
+│     failure:     [one sentence]
+│     alternative: [one sentence]
+│     question:    [one sentence]
 
-── biggest concern ───────────────────────────────────────
-│ [single opinionated architectural take — the one thing a principal would
-│  push back on hardest. not a summary of P1. a verdict.]
+── directive ─────────────────────────────────────────────
+│ Before merging: [single direct instruction — the one structural change
+│ that matters most. stated as an imperative, not a suggestion.]
 
-  verdict  NEEDS CHANGES  /  APPROVED  /  DISCUSS
+  verdict  MERGE  /  MERGE AFTER FIXES  /  REDESIGN NEEDED
 ```
 
 If signals section has no findings: omit that row (do not print empty rows).
 If no concerns found in Pass 3: print `── concerns ──` header followed by `│ none found`.
+Verdict guidance: MERGE = no blocking issues found; MERGE AFTER FIXES = specific addressable concerns; REDESIGN NEEDED = the approach itself is wrong, not just the implementation.
 
-next: "next: share these findings with the PR author, or run /zenith review PR {n} to review a teammate's PR"
+next: "next: share these findings with the PR author, or run /zenith deep review PR {n} for full context including PR history and past reviewer patterns"
 
 ### INTENT_RUN_CHECKS
 

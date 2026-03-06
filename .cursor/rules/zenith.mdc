@@ -11,7 +11,7 @@ When invoked with @zenith, do the following:
 
 1. Read the full instruction file using the terminal:
    ```bash
-   cat "$HOME/.zenith/SKILL.md"
+   cat "$HOME/.zenith/ZENITH.md"
    ```
 2. Follow every instruction in that file exactly as written.
 3. Wherever the file says "Bash tool", use your terminal access — they are equivalent.
@@ -27,7 +27,7 @@ Do not skip steps. Do not improvise. The instructions are deterministic by desig
 
 Print:
 ```
-zenith not found — ~/.zenith/SKILL.md is missing
+zenith not found — ~/.zenith/ZENITH.md is missing
 │ run the installer first:
 │   curl -fsSL https://raw.githubusercontent.com/kpatel513/zenith/main/scripts/setup.sh | bash
 │ then invoke @zenith again from inside a git repository

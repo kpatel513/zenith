@@ -54,7 +54,7 @@ Zenith is pre-configured with that context. It runs the same sequence every time
 When everyone uses the same command, the same sequence of operations runs every time — not because people remember to, but because there's no other path. Branch naming, scope checking, sync-before-push, and PR creation happen in the same order for everyone on the team.
 
 **The spec is version-controlled**
-`SKILL.md` lives in the repo. Changes to how Zenith behaves go through PR review, the same as any other codebase change. The team's git conventions are readable, diffable, and auditable.
+`ZENITH.md` lives in the repo. Changes to how Zenith behaves go through PR review, the same as any other codebase change. The team's git conventions are readable, diffable, and auditable.
 
 **Scope enforcement happens before the PR queue**
 In a shared monorepo, cross-folder changes are flagged at commit time rather than during code review. Reviewers see PRs that have already been checked against folder boundaries.
@@ -117,7 +117,7 @@ Zenith follows the open agent skills standard. Any compatible runtime can instal
 git clone https://github.com/kpatel513/zenith ~/.agents/skills/zenith
 ```
 
-The runtime reads `SKILL.md` from the cloned directory. No setup script required.
+The runtime reads `ZENITH.md` from the cloned directory. No setup script required.
 
 ---
 

@@ -46,6 +46,7 @@ Zenith is pre-configured with that context. It runs the same sequence every time
 | Catches commits to main | No | Yes — warns on startup |
 | Catches shared file edits | No | Yes — contamination check |
 | Catches large staged sets | No | Yes — pauses at >50 files |
+| Learns your workflow patterns | No | Yes — nudges before operations you keep getting wrong |
 | Catches hardcoded local paths | No | Yes — scans diff content |
 | Catches root-level dep changes | No | Yes — flags regardless of project_folder |
 
@@ -435,6 +436,34 @@ reviewing — feature/add-rate-limiter
 
   verdict  MERGE AFTER FIXES
 ```
+
+---
+
+## Pattern learning
+
+Zenith silently tracks your workflow events and surfaces behavioral nudges when a pattern recurs — before the operation that would repeat the mistake.
+
+**How it works:** After each operation, Zenith records an event to `~/.zenith/patterns.json`. When a pattern appears in 3 of your last 5 relevant operations in a repo, a nudge appears inline in the confirmation prompt for that operation. No separate command, no dashboard — it shows up exactly when it's useful.
+
+**Tracked patterns:**
+
+| Pattern | Recorded when | Nudge appears |
+|---------|--------------|---------------|
+| `amend_after_commit` | You run `forgot a file` or `fix commit message` | Before the next `save my work` confirmation — "you've amended after committing N of your last 5 saves" |
+| `push_behind_main` | You push while ≥5 commits behind main | Before the next push confirmation when behind ≥5 — "you've pushed with a large gap before, consider syncing first" |
+| `contamination` | A scope warning fires during save or push | Same scope warning gets a historical count added — "this has happened N of your last 5 commits" |
+
+**Example — amend nudge:**
+```
+committing — saving a permanent snapshot on your branch
+│ src/train.py   +24 -3
+│ can be undone safely with /zenith undo last commit
+│ heads up  you've amended after committing 3 of your last 5 saves — review staged changes carefully
+
+Commit these? [y/n]
+```
+
+**Storage:** `~/.zenith/patterns.json` — global across repos, local to your machine, never committed. Data is keyed by repo so patterns don't bleed across projects.
 
 ---
 

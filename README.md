@@ -443,7 +443,34 @@ reviewing — feature/add-rate-limiter
 
 Zenith silently tracks your workflow events and surfaces behavioral nudges when a pattern recurs — before the operation that would repeat the mistake.
 
-**How it works:** After each operation, Zenith records an event to `~/.zenith/patterns.json`. When a pattern appears in 3 of your last 5 relevant operations in a repo, a nudge appears inline in the confirmation prompt for that operation. No separate command, no dashboard — it shows up exactly when it's useful.
+### The feedback loop
+
+Raw Claude Code has no memory between sessions. Ask it to help you commit every day for a month and it will never notice you always forget to stage a file. Every session starts fresh.
+
+Zenith's pattern store changes this. Each operation you run is an observation. After enough observations, Zenith knows which mistakes you tend to repeat — and tells you about them before you make them again. The nudges appear inline in the confirmation prompt, not as interruptions. As your habits improve, the nudges fade. If a habit returns, so does the nudge.
+
+```mermaid
+flowchart TD
+    A[you run /zenith operations] --> B[zenith records event\n~/.zenith/patterns.json]
+    B --> C{3 of last 5?}
+    C -- no --> D[nothing shown\noperation continues normally]
+    C -- yes --> E[nudge appears inline\nbefore confirmation prompt]
+    E --> F[you review more carefully\nbefore confirming]
+    F --> G[fewer events recorded\nfor this pattern]
+    G --> H[nudge fades as\nfrequency drops below threshold]
+    H -. habit returns .-> B
+```
+
+| | Raw Claude Code | Zenith |
+|---|---|---|
+| Remembers your mistakes | Never — stateless per session | Yes — persists across sessions and repos |
+| Knows your habits | No | Yes — per-repo pattern store |
+| Gets better over time | No | Yes — nudges fade as behavior improves |
+| Requires configuration | — | None — observes automatically |
+
+### How it works
+
+After each operation, Zenith records an event to `~/.zenith/patterns.json`. When a pattern appears in 3 of your last 5 relevant operations in a repo, a nudge appears inline in the confirmation prompt for that operation. No separate command, no dashboard — it shows up exactly when it's useful.
 
 **Tracked patterns:**
 

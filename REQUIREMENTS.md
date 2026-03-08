@@ -298,6 +298,18 @@
 - Report matches with folder path and match type (filename / class / function)
 - Surface matches before user builds, to prevent two implementations of the same thing landing in the repo
 
+### FR-37: Pattern Learning (Pattern Store)
+- Silently record workflow events to `~/.zenith/patterns.json` after relevant operations complete
+- Tracked event types: `amend_after_commit` (recorded after INTENT_AMEND_ADD or INTENT_AMEND_MESSAGE), `push_behind_main` (recorded after INTENT_PUSH when behind count at start was ≥5), `contamination` (recorded when a contamination warning fires in INTENT_SAVE or INTENT_PUSH)
+- Each entry stores: event type, repo identifier (`{github_org}/{github_repo}`), and ISO timestamp
+- Nudge threshold: 3 or more occurrences in the last 5 entries for the same repo and event type
+- Surface nudges inline in the confirmation pipe block for the relevant operation — not as a separate step
+- `amend_after_commit` nudge: appears before INTENT_SAVE commit confirmation
+- `push_behind_main` nudge: appears before INTENT_PUSH confirmation when behind count ≥5
+- `contamination` nudge: adds historical count line to the existing contamination warning
+- Create `~/.zenith/patterns.json` automatically if absent; never commit it
+- Pattern store is global across repos; entries are scoped per repo using the repo identifier
+
 ## Non-Functional Requirements
 
 ### NFR-1: Single Entry Point
@@ -397,3 +409,4 @@ Files in references/ are specifications, not executable code. ZENITH.md reads an
 16. PR review gathers context from nine layers (git history, docs, config, code structure, PR history, open PRs, reviewer patterns) before making any finding
 17. PR review concerns are stated precisely in one sentence per field — no hedging, no padding
 18. PR review verdict maps unambiguously to one of three actions: merge as-is, fix specific issues, redesign the approach
+19. Pattern learning records workflow events silently and surfaces nudges inline before operations the user repeatedly gets wrong, without interrupting operations or requiring user configuration

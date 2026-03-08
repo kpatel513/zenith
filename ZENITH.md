@@ -294,6 +294,36 @@ If some did:
 Do NOT ask to sync here. Surface the information and continue to Step 2.
 The user can run `/zenith sync` explicitly when ready. Do not interrupt their current intent.
 
+## Pattern Store
+
+Zenith silently records workflow events to `~/.zenith/patterns.json` and surfaces behavioral nudges when a pattern recurs. The file is created automatically if absent. It is never committed.
+
+**Schema:**
+```json
+{
+  "version": 1,
+  "entries": [
+    {
+      "type": "amend_after_commit | push_behind_main | contamination",
+      "repo": "{github_org}/{github_repo}",
+      "recorded_at": "ISO timestamp"
+    }
+  ]
+}
+```
+
+**To record a pattern:** append one entry with the current repo and timestamp to `~/.zenith/patterns.json`.
+
+**To check a pattern (nudge threshold):** read `~/.zenith/patterns.json`, filter entries where `repo` = `{github_org}/{github_repo}` and `type` matches, take the last 5, return true if 3 or more exist.
+
+**Tracked patterns:**
+
+| Type | Record when | Nudge surfaces |
+|------|-------------|----------------|
+| `amend_after_commit` | INTENT_AMEND_ADD or INTENT_AMEND_MESSAGE executes successfully | Before INTENT_SAVE commit confirmation |
+| `push_behind_main` | INTENT_PUSH completes and behind count at start was ≥5 | Before INTENT_PUSH confirmation when behind ≥5 |
+| `contamination` | Contamination warning fires in INTENT_SAVE or INTENT_PUSH | Adds historical count to the same contamination warning |
+
 ## Step 2: Situation Detection
 
 From diagnostic output, classify into one situation:
@@ -816,10 +846,14 @@ Stop.
 Run contamination check silently.
 
 If files outside {project_folder} detected:
+
+Record pattern `contamination` for `{github_org}/{github_repo}`. Then check the `contamination` threshold. If met, add the historical count line to the warning below.
+
 ```
 scope warning — changes detected outside {project_folder}/
 │ {file}
 │ {file}
+[If contamination threshold met:] │ this has happened {n} of your last 5 commits
 
 Include or exclude outside files? [i/e]
 ```
@@ -851,12 +885,15 @@ Continue with all {n} files? [y/n]
 
 If no: stop. User should review and re-stage selectively.
 
+Check the `amend_after_commit` threshold. If met, add the nudge line to the pipe block below.
+
 Print:
 ```
 committing — saving a permanent snapshot on your branch
 │ {file}   +{n} -{n}
 │ {file}   +{n} -{n}
 │ can be undone safely with /zenith undo last commit
+[If amend_after_commit threshold met:] │ heads up  you've amended after committing {n} of your last 5 saves — review staged changes carefully
 
 Commit these? [y/n]
 ```
@@ -920,6 +957,8 @@ Print:
   ✓ updated  {new_message}
 ```
 
+Record pattern `amend_after_commit` for `{github_org}/{github_repo}`.
+
 Next: "next: run /zenith push when ready"
 
 ### INTENT_AMEND_ADD
@@ -956,6 +995,8 @@ Print:
   commit     {hash}
   message    {message}
 ```
+
+Record pattern `amend_after_commit` for `{github_org}/{github_repo}`.
 
 Next: "next: run /zenith push when ready"
 
@@ -1424,12 +1465,15 @@ Continue with all {n} files? [y/n]
 
 If no: stop. User should review and re-stage selectively.
 
+If behind count from Step 1 diagnostics is ≥5, check the `push_behind_main` threshold. If met, add the nudge line to the pipe block below.
+
 Print:
 ```
 pushing — commit → sync with {parent_branch} → push → open PR
 │ {file}   +{n} -{n}
 │ {file}   +{n} -{n}
 │ all steps run automatically after you confirm
+[If push_behind_main threshold met and behind ≥5:] │ heads up  you've pushed with {behind_count}+ commits behind {parent_branch} before — /zenith sync first catches conflicts earlier
 
 Commit and push? [y/n]
 ```
@@ -1500,6 +1544,8 @@ pushing — sending your branch to GitHub
 
   ✓ pushed
 ```
+
+If behind count from Step 1 diagnostics was ≥5, record pattern `push_behind_main` for `{github_org}/{github_repo}`.
 
 Ask: "Open as draft PR or ready for review? [d/r]"
 

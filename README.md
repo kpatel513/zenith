@@ -52,21 +52,7 @@ Zenith is pre-configured with that context. It runs the same sequence every time
 
 `/zenith push` does the same thing every time. It's closer to a CLI command than a conversation.
 
----
-
-## How it works at the team level
-
-**Consistent behavior across engineers**
-When everyone uses the same command, the same sequence of operations runs every time — not because people remember to, but because there's no other path. Branch naming, scope checking, sync-before-push, and PR creation happen in the same order for everyone on the team.
-
-**The spec is version-controlled**
-`ZENITH.md` lives in the repo. Changes to how Zenith behaves go through PR review, the same as any other codebase change. The team's git conventions are readable, diffable, and auditable.
-
-**Scope enforcement happens before the PR queue**
-In a shared monorepo, cross-folder changes are flagged at commit time rather than during code review. Reviewers see PRs that have already been checked against folder boundaries.
-
-**Context is configuration, not conversation**
-Your org name, base branch, project folder, and GitHub username are set once in `.agent-config`. They don't need to be re-specified each session. A new team member runs setup once and operates with the same context as everyone else.
+→ [How it works at the team level](docs/overview.md)
 
 ---
 
@@ -88,30 +74,7 @@ Zenith knows which folder is yours. It only commits your files, warns you if any
 
 **Solo or small-team repos** — you own the whole thing, but you still want safe branching, automatic syncing, and PR workflows without thinking about git commands.
 
-It's especially useful for people who are strong in their domain — ML, data, design — but don't spend their days thinking about git.
-
----
-
-## What it protects you from
-
-**General monorepo safety:**
-- Committing directly to `main` by accident
-- Pushing code that touches files outside your folder
-- Pushing before syncing with the latest team changes
-- Merge conflicts that invalidate your teammates' PR reviews
-- Getting stuck after a push fails with a cryptic git error
-- `.gitignore` rules that silently break other teams' folders
-- PRs flooded with 400 auto-generated files because someone ran `git add .`
-- Merge conflict resolutions that silently discard the correct version of code
-- Root-level dependency changes (`requirements.txt`, `pyproject.toml`) that introduce version conflicts across unrelated projects
-
-**Claude Code-specific:**
-- Claude Code committing directly to `main` without creating a branch first
-- Claude Code editing shared utilities (`common/`, `shared/`) that affect eight other projects
-- Claude Code placing generated files (`.env`, output dirs, cache folders) in unexpected locations that end up committed
-- Claude Code modifying root-level dependency files when you only asked it to add a dependency to your project
-- Claude Code resolving a merge conflict by picking one side — and discarding the side that was actually correct
-- Two engineers independently asking Claude Code to build the same thing, both landing in the repo
+→ [Full safety rules and what Zenith catches](docs/safety.md)
 
 ---
 
@@ -186,7 +149,7 @@ Base branch [main]:                        main
 
 From that point on, `/zenith` in that repo reads the saved config and runs without asking again.
 
-**Adding a new repo later?** Just open Claude Code in that repo and run any `/zenith` command. Same first-time setup, same 4 questions.
+Adding a new repo later? Just open Claude Code in that repo and run any `/zenith` command — same first-time setup.
 
 ---
 
@@ -205,67 +168,20 @@ You'll see a table of everything Zenith can do.
 **What setup does**
 
 - Installs Zenith to `~/.zenith` on your machine
-- Creates `~/.claude/commands/zenith.md` — makes `/zenith` available in every Claude Code session, regardless of which directory you open it from
+- Creates `~/.claude/commands/zenith.md` — makes `/zenith` available in every Claude Code session
 - Creates `~/.cursor/rules/zenith.mdc` (if you opt in) — makes `@zenith` available in every Cursor session
 - Writes `~/.zenith/.global-config` with your GitHub username — pre-fills it for every repo you configure
 - Installs a daily background update so you always have the latest version
 
-**New machine or reinstalling?** The setup script is safe to re-run. It won't overwrite anything or create duplicates. To change your username after setup, edit `~/.zenith/.global-config` directly.
+New machine or reinstalling? The setup script is safe to re-run. To change your username after setup, edit `~/.zenith/.global-config` directly.
 
 ---
 
 ## Using Zenith in Cursor
 
-### First-time install
+Works via `@zenith`. Run `setup.sh` and answer `y` to the Cursor prompt — that's it. Already installed? One-liner to add Cursor support manually.
 
-Run the same `setup.sh` installer and answer **y** to the Cursor question. That creates `~/.cursor/rules/zenith.mdc`, which makes `@zenith` available in every Cursor session on your machine.
-
-### Already have Zenith installed?
-
-Setup won't re-run if Zenith is already installed. Add Cursor support with one command:
-
-```bash
-mkdir -p ~/.cursor/rules && ln -s ~/.zenith/.cursor/rules/zenith.mdc ~/.cursor/rules/zenith.mdc
-```
-
-### How to invoke
-
-Open Cursor's **Chat** or **Composer** panel, type `@zenith` followed by your request, and press Enter:
-
-```
-@zenith push my changes
-@zenith start new feature
-@zenith sync with main
-@zenith help
-```
-
-Cursor will show a dropdown when you type `@` — select **zenith** from the list, then add your request. The same phrases from the "What you can say" table below all work.
-
-### First use in a repo
-
-The first time you run `@zenith` in a repo that hasn't been configured, Zenith walks you through the same 4-question setup as Claude Code:
-
-```
-first-time setup — no config found for this repo
-│ detected: /Users/alice/code/company-repo
-│ answering 4 questions configures Zenith for this repo permanently
-
-Your project folder (or . for whole repo): team-ml/recommendations
-GitHub organization:                       acme-corp
-GitHub repository:                         company-repo
-Base branch [main]:                        main
-```
-
-If you've already configured the repo via Claude Code, `@zenith` picks up the same `.agent-config` — no duplicate setup.
-
-### Model compatibility
-
-**Claude Code is not required.** Zenith works with any model available in Cursor — Claude, GPT-4o, Gemini, or Cursor's built-in model.
-
-> If your repo's `.gitignore` excludes `.cursor/`, add an exception so teammates who use Cursor can get the rule:
-> ```
-> !.cursor/rules/zenith.mdc
-> ```
+→ [Full Cursor setup and model compatibility](docs/cursor.md)
 
 ---
 
@@ -319,207 +235,65 @@ You don't have to memorize exact phrases. Zenith understands intent.
 
 ## Stacked PRs
 
-When change B depends on change A and both need separate PRs, use a stack.
+When change B depends on change A and both need separate PRs, use a stack. Run `start new work` from an existing feature branch — Zenith asks whether to branch from main or stack on top. The stack is managed locally and never committed.
 
-**Start a stack** — when you're already on a feature branch, run `start new work`. Zenith asks whether to branch from main or stack on top of the current branch. Choose "stack" and the new branch automatically targets the parent branch instead of main.
-
-**What changes:**
-- `push` — opens the PR against the parent branch (not main)
-- `sync` — syncs against the parent branch
-- `show my stack` — displays the full chain with PR status and CI state for each level
-
-**When the parent PR merges:**
-
-Run `I merged the PR`. Zenith detects which PR merged and handles the cascade:
-1. Retargets your PR base from the parent branch to main
-2. Runs `git rebase --onto` to drop the parent's commits from your branch
-3. Force-pushes and cleans up the stored parent config
-
-Your PR on GitHub automatically updates to show the correct diff.
-
-**Stack info is stored in git config locally** — it is never committed and never sent anywhere.
+→ [Full stacked PR workflow](docs/stacked-prs.md)
 
 ---
 
 ## PR Review
 
-Zenith runs a three-pass adversarial review — designed to behave like a skeptical principal engineer, not a helpful assistant. It works in two modes.
+Zenith runs a three-pass adversarial review — designed to behave like a skeptical principal engineer, not a helpful assistant. Two tiers:
 
-**Two tiers:**
-
-`review` — standard tier, Layers 1–6. Fast. Uses git history, docs, project config, and code structure. Good for a quick pre-submit check.
-
-`deep review` — full context, Layers 1–9. Adds PR history on touched files, open PRs touching the same files, and recurring themes from past review comments. Use this before submitting work in a high-traffic or contested area of the codebase.
-
-**Author mode** — before you submit, while you're still on your branch:
-```
-/zenith review my PR
-/zenith deep review my PR
-```
-
-**Reviewer mode** — when you've been assigned to review someone else's PR:
-```
-/zenith review PR 123
-/zenith deep review PR 123
-```
-
-### How the three passes work
-
-**Pass 1 — Benevolent.** What does this diff actually do? Zenith reads the raw diff, the commit messages, and the PR description and produces 3–5 plain English bullets. Facts, no opinions.
-
-**Pass 2 — Signals.** Automated checks across nine dimensions:
-- **Scope** — are all changed files inside your project folder, or did the PR accidentally touch something else?
-- **Volatile files** — files with more than 10 commits in the past year are flagged; bugs introduced here tend to be expensive
-- **Fragile files** — files that have had revert or hotfix commits are flagged with the history
-- **Duplicate symbols** — new functions or classes are grep'd against the whole codebase; if the same name already exists somewhere, it's surfaced
-- **PR history** — files that appeared in 3+ PRs in the past 60 days are flagged as actively evolving and higher integration risk
-- **Open PR conflicts** — other open PRs touching the same files are surfaced so you can coordinate before merging
-- **Reviewer patterns** — recurring themes from past review comments on these files are surfaced as known concerns for this area
-- **Config signals** — duplicate dependencies, untyped code where mypy runs, version pins broken by the change
-- **Structure signals** — code placed outside the established module layout, public API not exported in `__init__.py`
-
-**Pass 3 — Architect (isolated).** Pass 3 sees only the raw diff — it never reads Pass 1 or Pass 2 output. Persona: senior architect with 15+ years of experience. Not adversarial — precise. Finds the one or two structural issues that will compound over time and states them plainly, in one sentence each. Ignores style and minor issues. Every concern has all four fields, each exactly one sentence:
-- line citation
-- failure scenario ("when X under Y condition, result is Z")
-- alternative (what to do instead)
-- question (what the author must answer before merging)
-
-Pass 3 explicitly checks eleven things: right problem vs. symptom, failure recovery, coupling introduced, simpler path available, worst-case load and data, readability for the next engineer, what it makes harder to change in 6 months, hidden assumptions about callers or environment, correct abstraction level (not over/under-engineered), whether this belongs at this layer of the system, and whether total complexity is proportional to value delivered.
-
-### Team context file
-
-Create `.zenith-context` at the repo root (committed, not personal) to raise the quality ceiling:
-
-```
-[failure_patterns]
-db query inside loop → connection pool exhaustion (incident 2024-03)
-
-[existing_utilities]
-src/utils/retry.js — circuit breaker, use instead of custom retry logic
-
-[architecture]
-never couple payment flow to session state (ADR-007)
-```
-
-A template is at `assets/.zenith-context.template`. Zenith checks every PR diff against the patterns in this file and flags matches in the signals section. No file, no error — it just runs on git history and codebase scan alone.
-
-### What the output looks like
+- `review` / `review PR 123` — Layers 1–6, fast, good for pre-submit checks
+- `deep review` / `deep review PR 123` — Layers 1–9, adds PR history, open PR conflicts, and past reviewer patterns
 
 ```
 reviewing — feature/add-rate-limiter
 │ CI: ✓  base: main  +84 -12
-│ 3-pass review: summary → signals → architect (pass 3 sees raw diff only)
 
-── what it does ──────────────────────────────────────────
-│ • Adds a token bucket rate limiter to the API gateway middleware
+── what it does ────────────────────────────────────────
+│ • Adds a token bucket rate limiter to the API gateway
 │ • Stores per-user token counts in Redis with a 60s TTL
-│ • Returns 429 with Retry-After header when limit is exceeded
+│ • Returns 429 with Retry-After header when limit exceeded
 
-── signals ───────────────────────────────────────────────
-│ scope      ✓ within team-api/
-│ volatile   src/middleware/auth.js — 18 commits in past year, 2 reverts
+── signals ─────────────────────────────────────────────
+│ volatile   src/middleware/auth.js — 18 commits, 2 reverts
 │ duplicate  RateLimiter already exists at src/utils/throttle.js
-│ pr history src/middleware/auth.js appeared in PR #38 (12 days ago) and PR #35 (31 days ago)
-│ conflict   PR #41 (bob) also touches src/middleware/auth.js — coordinate before merging
-│ reviewer   recurring feedback on auth.js: "initialize clients at module load, not per-request"
-│ config     requirements.txt pins redis==4.5.1 — new redis.asyncio import requires 4.6+
+│ conflict   PR #41 (bob) also touches src/middleware/auth.js
 
-── concerns ──────────────────────────────────────────────
-│ P1  src/middleware/auth.js line 47: Redis client initialized inside the middleware function.
-│     failure:     New connection on every request under load causes pool exhaustion.
-│     alternative: Initialize once at module load and inject as a dependency.
-│     question:    What is the expected RPS and how many middleware instances run concurrently?
-
-── directive ─────────────────────────────────────────────
-│ Before merging: move rate limiting before auth so unauthenticated request floods
-│ don't bypass it entirely.
+── concerns ────────────────────────────────────────────
+│ P1  auth.js line 47: Redis client initialized per-request.
+│     failure:     Pool exhaustion under load.
+│     alternative: Initialize once at module load.
+│     question:    What is the expected RPS?
 
   verdict  MERGE AFTER FIXES
 ```
+
+→ [Three-pass review details, signal definitions, and team context file](docs/pr-review.md)
 
 ---
 
 ## Pattern learning
 
-Zenith silently tracks your workflow events and surfaces behavioral nudges when a pattern recurs — before the operation that would repeat the mistake.
+Zenith tracks your workflow events and surfaces nudges when a mistake recurs — before the operation that would repeat it. Nudges appear inline in the confirmation prompt and fade as your habits improve. Nothing to configure — it observes automatically.
 
-### The feedback loop
-
-Raw Claude Code has no memory between sessions. Ask it to help you commit every day for a month and it will never notice you always forget to stage a file. Every session starts fresh.
-
-Zenith's pattern store changes this. Each operation you run is an observation. After enough observations, Zenith knows which mistakes you tend to repeat — and tells you about them before you make them again. The nudges appear inline in the confirmation prompt, not as interruptions. As your habits improve, the nudges fade. If a habit returns, so does the nudge.
-
-```mermaid
-flowchart TD
-    A[you run /zenith operations] --> B[zenith records event\n~/.zenith/patterns.json]
-    B --> C{3 of last 5?}
-    C -- no --> D[nothing shown\noperation continues normally]
-    C -- yes --> E[nudge appears inline\nbefore confirmation prompt]
-    E --> F[you review more carefully\nbefore confirming]
-    F --> G[fewer events recorded\nfor this pattern]
-    G --> H[nudge fades as\nfrequency drops below threshold]
-    H -. habit returns .-> B
-```
-
-| | Raw Claude Code | Zenith |
-|---|---|---|
-| Remembers your mistakes | Never — stateless per session | Yes — persists across sessions and repos |
-| Knows your habits | No | Yes — per-repo pattern store |
-| Gets better over time | No | Yes — nudges fade as behavior improves |
-| Requires configuration | — | None — observes automatically |
-
-### How it works
-
-After each operation, Zenith records an event to `~/.zenith/patterns.json`. When a pattern appears in 3 of your last 5 relevant operations in a repo, a nudge appears inline in the confirmation prompt for that operation. No separate command, no dashboard — it shows up exactly when it's useful.
-
-**Tracked patterns:**
-
-| Pattern | Recorded when | Nudge appears |
-|---------|--------------|---------------|
-| `amend_after_commit` | You run `forgot a file` or `fix commit message` | Before the next `save my work` confirmation — "you've amended after committing N of your last 5 saves" |
-| `push_behind_main` | You push while ≥5 commits behind main | Before the next push confirmation when behind ≥5 — "you've pushed with a large gap before, consider syncing first" |
-| `contamination` | A scope warning fires during save or push | Same scope warning gets a historical count added — "this has happened N of your last 5 commits" |
-
-**Example — amend nudge:**
-```
-committing — saving a permanent snapshot on your branch
-│ src/train.py   +24 -3
-│ can be undone safely with /zenith undo last commit
-│ heads up  you've amended after committing 3 of your last 5 saves — review staged changes carefully
-
-Commit these? [y/n]
-```
-
-**Storage:** `~/.zenith/patterns.json` — global across repos, local to your machine, never committed. Data is keyed by repo so patterns don't bleed across projects.
+→ [How pattern tracking works, tracked patterns, and examples](docs/pattern-learning.md)
 
 ---
 
 ## Claude Code safety layer
 
-When Claude Code helps you write code, it makes reasonable engineering decisions — but those decisions don't always account for monorepo conventions. Zenith adds a safety layer specifically for this.
+Claude Code sees the whole codebase and makes reasonable calls — but it doesn't know your monorepo conventions. Zenith intercepts at commit and push time to catch scope violations, generated files, hardcoded paths, and conflict resolutions that silently discard correct code.
 
-**The problem:** Claude Code sees the whole codebase. When you ask it to add logging to your training script, it might edit `common/utils/logger.py` because that's the right call architecturally — but that file is used by eight other projects. Claude Code doesn't know that touching it requires team sign-off. You commit the diff without reading it carefully, and the PR shows up touching files in four different teams' folders.
-
-**What Zenith catches automatically:**
-
-| Situation | What Zenith does |
-|-----------|-----------------|
-| Claude Code commits directly to `main` | Step 1 warns on startup: "N unpushed commits on main — run /zenith move my commits" |
-| Claude Code stages 400 generated files | INTENT_SAVE and INTENT_PUSH pause when >50 files staged and show a per-folder breakdown |
-| Claude Code edits `common/` or `shared/` | Contamination check flags shared paths and asks to confirm before committing |
-| Claude Code modifies `requirements.txt` | Contamination check flags root-level dependency files regardless of your project_folder setting |
-| Claude Code writes `/Users/alice/data/` into your code | Contamination check scans diff content for absolute paths and blocks commit |
-| Claude Code resolves a conflict by picking one side | INTENT_FIX_CONFLICT shows the discarded version and asks "is this safe to drop?" before committing |
-| Claude Code generates `.env` or output dirs | Contamination check flags credential filenames and ML output paths |
-| You ask Claude Code to build something that already exists | INTENT_FIND_DUPLICATES searches the repo before you start building |
-
-**None of this requires you to change how you use Claude Code.** You keep using it as you normally would. Zenith intercepts at commit and push time — the natural checkpoint where a second set of eyes would catch these issues.
+→ [Full list of what Zenith catches from Claude Code](docs/safety.md)
 
 ---
 
 ## Your settings
 
-After first use in a repo, `.agent-config` lives at your repo root. **It is never committed to GitHub** — Zenith automatically adds it to `.gitignore`. Each team member runs the first-time setup once and gets their own private copy with their own folder and username.
+After first use in a repo, `.agent-config` lives at your repo root. **It is never committed to GitHub** — Zenith automatically adds it to `.gitignore`. Each team member gets their own private copy.
 
 ```ini
 [repo]

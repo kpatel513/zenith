@@ -490,6 +490,50 @@ pre-commit run --files {files}
 
 ---
 
+## Worktree Commands
+
+### CMD_WORKTREE_LIST
+```bash
+git worktree list --porcelain
+```
+**Purpose:** List all worktrees with their paths and branches in machine-readable format
+**Output:** Porcelain records with worktree path, HEAD hash, and branch
+**Used for:** INTENT_WORKTREE_LIST, INTENT_WORKTREE_ADD (conflict check), INTENT_WORKTREE_REMOVE
+
+### CMD_WORKTREE_ADD
+```bash
+git worktree add {path} {branch}
+```
+**Purpose:** Add a new worktree for an existing branch
+**Output:** Preparing worktree message with path
+**Used for:** INTENT_WORKTREE_ADD — checking out an existing branch
+
+### CMD_WORKTREE_ADD_NEW
+```bash
+git worktree add -b {branch} {path} {base_branch}
+```
+**Purpose:** Add a new worktree and create a new branch from base
+**Output:** Preparing worktree message with path and branch
+**Used for:** INTENT_WORKTREE_ADD — creating a new branch in a separate directory
+
+### CMD_WORKTREE_REMOVE
+```bash
+git worktree remove {path}
+```
+**Purpose:** Remove a linked worktree directory and its metadata
+**Output:** None (silent on success)
+**Used for:** INTENT_WORKTREE_REMOVE
+
+### CMD_WORKTREE_PRUNE
+```bash
+git worktree prune
+```
+**Purpose:** Remove stale worktree administrative files for deleted directories
+**Output:** None (silent on success)
+**Used for:** INTENT_WORKTREE_REMOVE — cleanup after removal
+
+---
+
 ## Reference Usage
 
 **To reference a command in documentation:**

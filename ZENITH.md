@@ -438,6 +438,9 @@ Map user's request to ONE intent. Use both request text AND situation to classif
 - `INTENT_GITIGNORE_CHECK` - check gitignore, gitignore is wrong, gitignore breaking things, audit gitignore, gitignore scope
 - `INTENT_CHERRY_PICK` - cherry-pick a fix, grab a commit from another branch, borrow a commit, pick a specific commit
 - `INTENT_FIND_DUPLICATES` - check for duplicates, is there already a data loader, find similar implementations, duplicate detection
+- `INTENT_WORKTREE_ADD` - open branch in new worktree, second checkout, work on two branches at once, review PR without losing changes
+- `INTENT_WORKTREE_LIST` - list worktrees, show worktrees, how many worktrees do I have
+- `INTENT_WORKTREE_REMOVE` - remove worktree, done with worktree, clean up worktree, delete worktree
 - `INTENT_HELP` - help, what can you do, what commands exist
 - `INTENT_UNKNOWN` - cannot determine intent
 
@@ -483,6 +486,9 @@ deep review PR 123        | Same with full context layers
 check gitignore           | Audit .gitignore changes for rules that silently break other teams' folders
 cherry-pick a fix         | Safely apply a specific commit from another branch into your folder
 find duplicates           | Search for similar implementations already in the repo
+open worktree             | Check out a branch in a new directory — switch contexts without stashing
+list worktrees            | Show all active worktrees and their paths
+remove worktree           | Delete a linked worktree directory
 help                      | Show this table
 ```
 
@@ -3002,6 +3008,152 @@ possible duplicates — similar implementations found outside {project_folder}/
 ```
 
 Next: "next: review the matches above — if they overlap, coordinate with the owner before building your own version"
+
+### INTENT_WORKTREE_ADD
+
+List existing worktrees:
+```bash
+git worktree list --porcelain   # CMD_WORKTREE_LIST
+```
+
+Show numbered list of local branches for selection:
+```bash
+git branch --sort=-committerdate --format="%(refname:short) %(committerdate:relative)" | head -10
+```
+
+Ask: "Which branch to open in a new worktree? (enter a branch name, or 'new' to create one)"
+
+If "new": ask "What are you working on?" and sanitize to `feature/{sanitized}` using the same rules as INTENT_START_NEW (lowercase, spaces to hyphens, no special chars, `feature/` prefix).
+
+Check if branch is already checked out in another worktree:
+```bash
+git worktree list --porcelain | grep "^branch refs/heads/{branch}$"   # CMD_WORKTREE_LIST
+```
+
+If already checked out:
+```
+blocked — {branch} is already checked out
+│ a branch can only be active in one worktree at a time
+│ run /zenith list worktrees to see where it is checked out
+```
+Stop.
+
+Compute path:
+```bash
+REPO_NAME=$(basename "$REPO_ROOT")
+BRANCH_SAFE=$(echo "{branch}" | tr '/' '-')
+WORKTREE_PATH="${REPO_ROOT}/../${REPO_NAME}-${BRANCH_SAFE}"
+```
+
+Show preview and confirm:
+```
+adding worktree — {branch} in a separate directory
+│ path    {path}
+│ branch  {branch}
+│ your current directory is untouched
+
+Add worktree? [y/n]
+```
+
+If existing branch:
+```bash
+git worktree add {path} {branch}   # CMD_WORKTREE_ADD
+```
+
+If new branch:
+```bash
+git worktree add -b {branch} {path} {base_branch}   # CMD_WORKTREE_ADD_NEW
+git -C {path} push -u origin {branch}               # CMD_PUSH_SET_UPSTREAM
+```
+
+Print:
+```
+  ✓ worktree  {path}
+  branch      {branch}
+  navigate    cd {path}
+```
+
+Next: "next: cd {path} to start working — your current directory stays on {current_branch}"
+
+### INTENT_WORKTREE_LIST
+
+Execute:
+```bash
+git worktree list --porcelain   # CMD_WORKTREE_LIST
+```
+
+If only the main worktree exists:
+```
+no linked worktrees — only the main checkout is active
+│ run /zenith open worktree to check out a branch in a separate directory
+```
+Next: "next: run /zenith open worktree to work on two branches simultaneously"
+Stop.
+
+Format as numbered list:
+```
+worktrees — {n} active
+  1. {path}
+     branch  {current_branch}  (main worktree)
+  2. {path}
+     branch  {branch}
+```
+
+Next: "next: cd to a worktree path to switch context, or /zenith remove worktree to clean up"
+
+### INTENT_WORKTREE_REMOVE
+
+Execute:
+```bash
+git worktree list --porcelain   # CMD_WORKTREE_LIST
+```
+
+If only the main worktree exists:
+```
+nothing to remove — no linked worktrees found
+│ the main worktree cannot be removed
+```
+Stop.
+
+Show numbered list of linked worktrees (exclude main). Ask: "Which worktree to remove? (enter number)"
+
+Check for uncommitted changes in selected worktree:
+```bash
+git -C {path} status --short
+```
+
+If changes exist:
+```
+warning — worktree has uncommitted changes
+│ {n} files modified in {path}
+│ the branch is not deleted — only the working directory is removed
+│ uncommitted changes in that directory will be lost
+
+Remove anyway? [y/n]
+```
+
+If no uncommitted changes, show preview and confirm:
+```
+removing worktree — {path}
+│ branch  {branch}
+│ the branch itself is not deleted — only the working directory
+
+Remove? [y/n]
+```
+
+Execute:
+```bash
+git worktree remove {path}   # CMD_WORKTREE_REMOVE
+git worktree prune            # CMD_WORKTREE_PRUNE
+```
+
+Print:
+```
+  ✓ removed   {path}
+  branch      {branch} still exists
+```
+
+Next: "next: run /zenith cleanup branches to delete {branch} if you're done with it"
 
 ## Step 5: After Every Operation
 

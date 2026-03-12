@@ -419,6 +419,22 @@ git config --get user.email
 
 ## GitHub PR Commands
 
+### CMD_PR_LIST_OPEN
+```bash
+gh pr list --repo {github_org}/{github_repo} --state open --limit 30 --json number,title,author,createdAt,updatedAt,headRefName
+```
+**Purpose:** Fetch metadata for up to 30 most recently updated open PRs
+**Output:** JSON array with number, title, author, dates, and head branch name
+**Used for:** INTENT_CONFLICT_RADAR — building candidate list before file-level comparison
+
+### CMD_PR_DIFF_NAME_ONLY
+```bash
+gh pr diff {pr_number} --name-only
+```
+**Purpose:** List files changed in a specific pull request
+**Output:** Newline-separated file paths
+**Used for:** INTENT_CONFLICT_RADAR — comparing each PR's file list against branch file list
+
 ### CMD_PR_DIFF
 ```bash
 gh pr diff {pr_number}

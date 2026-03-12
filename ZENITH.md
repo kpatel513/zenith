@@ -438,6 +438,7 @@ Map user's request to ONE intent. Use both request text AND situation to classif
 - `INTENT_GITIGNORE_CHECK` - check gitignore, gitignore is wrong, gitignore breaking things, audit gitignore, gitignore scope
 - `INTENT_CHERRY_PICK` - cherry-pick a fix, grab a commit from another branch, borrow a commit, pick a specific commit
 - `INTENT_FIND_DUPLICATES` - check for duplicates, is there already a data loader, find similar implementations, duplicate detection
+- `INTENT_CONFLICT_RADAR` - conflict radar, check for conflicting PRs, who's touching my files, any conflicting PRs, will my push conflict, show overlapping PRs
 - `INTENT_WORKTREE_ADD` - open branch in new worktree, second checkout, work on two branches at once, review PR without losing changes
 - `INTENT_WORKTREE_LIST` - list worktrees, show worktrees, how many worktrees do I have
 - `INTENT_WORKTREE_REMOVE` - remove worktree, done with worktree, clean up worktree, delete worktree
@@ -486,6 +487,7 @@ deep review PR 123        | Same with full context layers
 check gitignore           | Audit .gitignore changes for rules that silently break other teams' folders
 cherry-pick a fix         | Safely apply a specific commit from another branch into your folder
 find duplicates           | Search for similar implementations already in the repo
+conflict radar            | Show open PRs that touch the same files as your current changes
 open worktree             | Check out a branch in a new directory — switch contexts without stashing
 list worktrees            | Show all active worktrees and their paths
 remove worktree           | Delete a linked worktree directory
@@ -1982,6 +1984,107 @@ CI failed — {run_name} #{run_id}
 ```
 
 Next: "next: fix the failure, then run /zenith push to add a new commit and re-trigger CI"
+
+### INTENT_CONFLICT_RADAR
+
+If on `{base_branch}`:
+```
+blocked — you are on {base_branch}
+│ conflict radar checks open PRs against your branch changes
+│ switch to a feature branch first
+```
+Stop.
+
+Collect this branch's file list:
+```bash
+git fetch origin                   # CMD_FETCH_ORIGIN
+git diff --name-only origin/{base_branch}...HEAD
+```
+
+If empty, fall back to:
+```bash
+git diff --name-only HEAD          # CMD_DIFF_NAME_ONLY
+```
+
+If still empty:
+```
+nothing to check — no changed files found on this branch
+│ make some changes, then run /zenith conflict radar
+```
+Stop.
+
+Fetch open PRs:
+```bash
+gh pr list --repo {github_org}/{github_repo} --state open --limit 30 --json number,title,author,createdAt,updatedAt,headRefName   # CMD_PR_LIST_OPEN
+```
+
+If `gh` fails (not installed or not authenticated): print error and stop:
+```
+conflict radar unavailable — GitHub CLI not configured
+│ install gh and run gh auth login, then try again
+```
+
+Exclude the current branch's own PR from the list (match `headRefName` to `{current_branch}`).
+
+If no PRs remain:
+```
+conflict radar — no open PRs found
+│ no other open PRs in {github_org}/{github_repo}
+│ nothing to conflict with
+```
+Next: "next: you're clear to push — run /zenith push"
+Stop.
+
+For each PR, fetch its file list:
+```bash
+gh pr diff {pr_number} --name-only   # CMD_PR_DIFF_NAME_ONLY
+```
+
+If a single PR call fails, skip it silently and continue.
+
+Find the intersection of each PR's file list with `MY_FILES`. Track:
+- `EXACT_OVERLAPS` — PRs with at least one file in common
+- `DIR_OVERLAPS` — PRs whose files share a directory with `MY_FILES` but have no exact file match
+
+**Risk labels (assign to each PR in EXACT_OVERLAPS):**
+
+Read `createdAt` and `updatedAt` from the JSON metadata. Reason about the timestamps in plain English:
+- If `updatedAt` is within the last 6 hours: label `→ likely to merge first`
+- If `createdAt` is more than 7 days ago and `updatedAt` is more than 3 days ago: label `⚠ stale`
+- Otherwise: no label
+
+A PR is **highest risk** if it has exact file overlap AND the label `→ likely to merge first`.
+
+**Output — if no overlaps:**
+```
+conflict radar — no overlapping PRs
+│ none of the {n} open PRs touch the same files as your branch
+```
+Next: "next: you're clear to push — run /zenith push"
+Stop.
+
+**Output — if exact overlaps found:**
+```
+conflict radar — {n} open PR(s) overlap with your changes
+
+│ PR #{number}  {author.login}   {overlapping_file}   opened {age}   {label}
+│ PR #{number}  {author.login}   {overlapping_file}   opened {age}   {label}
+│
+│ highest risk: PR #{number} — same file, likely to merge before you
+│ coordinate with {author.login} before pushing or expect a conflict
+```
+
+If no highest-risk PRs, omit the `highest risk` summary line.
+
+If `DIR_OVERLAPS` exist, append:
+```
+│
+│ possible overlap (same directory, different files):
+│   PR #{number}  {author.login}   {dir}/
+```
+
+Next (if highest-risk found): "next: review PR #{number} before pushing — run /zenith review PR {number}"
+Next (if overlaps but no highest-risk): "next: review the PRs above, then run /zenith push when ready"
 
 ### INTENT_CLEANUP_BRANCHES
 

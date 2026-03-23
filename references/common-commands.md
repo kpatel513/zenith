@@ -417,6 +417,18 @@ git config --get user.email
 
 ---
 
+## Grep and Search Commands
+
+### CMD_GREP_FILE_REFS
+```bash
+git grep -l "{module_name}"
+```
+**Purpose:** Find all tracked files that reference a module name
+**Output:** List of file paths containing the search term
+**Used for:** INTENT_BLAST_RADIUS — finding files that depend on changed files
+
+---
+
 ## GitHub PR Commands
 
 ### CMD_PR_LIST_OPEN

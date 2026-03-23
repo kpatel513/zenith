@@ -438,6 +438,7 @@ Map user's request to ONE intent. Use both request text AND situation to classif
 - `INTENT_GITIGNORE_CHECK` - check gitignore, gitignore is wrong, gitignore breaking things, audit gitignore, gitignore scope
 - `INTENT_CHERRY_PICK` - cherry-pick a fix, grab a commit from another branch, borrow a commit, pick a specific commit
 - `INTENT_FIND_DUPLICATES` - check for duplicates, is there already a data loader, find similar implementations, duplicate detection
+- `INTENT_BLAST_RADIUS` - blast radius, who depends on my changes, what breaks if I change this, impact analysis, downstream impact, what files import this
 - `INTENT_CONFLICT_RADAR` - conflict radar, check for conflicting PRs, who's touching my files, any conflicting PRs, will my push conflict, show overlapping PRs
 - `INTENT_WORKTREE_ADD` - open branch in new worktree, second checkout, work on two branches at once, review PR without losing changes
 - `INTENT_WORKTREE_LIST` - list worktrees, show worktrees, how many worktrees do I have
@@ -487,6 +488,7 @@ deep review PR 123        | Same with full context layers
 check gitignore           | Audit .gitignore changes for rules that silently break other teams' folders
 cherry-pick a fix         | Safely apply a specific commit from another branch into your folder
 find duplicates           | Search for similar implementations already in the repo
+blast radius              | Show every file in the repo that depends on what you changed — surface cross-team impact before you push
 conflict radar            | Show open PRs that touch the same files as your current changes
 open worktree             | Check out a branch in a new directory — switch contexts without stashing
 list worktrees            | Show all active worktrees and their paths
@@ -1984,6 +1986,77 @@ CI failed — {run_name} #{run_id}
 ```
 
 Next: "next: fix the failure, then run /zenith push to add a new commit and re-trigger CI"
+
+### INTENT_BLAST_RADIUS
+
+Collect changed files:
+```bash
+git diff --name-only origin/{base_branch}...HEAD
+```
+
+If empty, fall back to:
+```bash
+git diff --name-only HEAD          # CMD_DIFF_NAME_ONLY
+```
+
+If still empty:
+```
+nothing to check — no changed files found on this branch
+│ make some changes, then run /zenith blast radius
+```
+Stop.
+
+For each changed file, extract the module name: take the filename, strip the directory path and file extension. Example: `src/auth/login.py` → `login`, `team-ml/pipeline.js` → `pipeline`.
+
+Skip any module name shorter than 4 characters — too generic to search reliably.
+
+For each module name, search for references across the repo:
+```bash
+git grep -l "{module_name}"   # CMD_GREP_FILE_REFS
+```
+
+From the results:
+- Exclude the source file itself
+- Exclude paths containing `.git/`, `__pycache__/`, `node_modules/`, `.egg-info/`
+- Cap at 20 results per file — if more exist, note the count
+
+Group all results by top-level directory (first path component of each result).
+
+**Output — if no dependents found across all changed files:**
+```
+blast radius — no dependents found
+│ no tracked files reference {module_names}
+│ this may be a new file or an entry point with no importers
+```
+Next: "next: you're clear to push — run /zenith push"
+Stop.
+
+**Output — if impact is contained within {project_folder}:**
+```
+blast radius — impact contained
+│ {n} dependent file(s) found, all within {project_folder}/
+│ no cross-team impact detected
+```
+Next: "next: impact is local — run /zenith push when ready"
+Stop.
+
+**Output — if cross-folder impact detected:**
+```
+blast radius — {n} changed file(s), {total} dependent(s) across {m} folder(s)
+
+│ {changed_file}  →  {count} file(s) reference it
+│   {dependent_file}   {folder}/
+│   {dependent_file}   {folder}/
+[If count > 3:] │   ... {remaining} more in {folder}/
+
+│ {changed_file}  →  {count} file(s) reference it
+│   {dependent_file}   {folder}/
+
+│ cross-folder impact: {folder} ({n}), {folder} ({n})
+│ consider whether your changes are backwards compatible before pushing
+```
+
+Next: "next: review the cross-folder impact above before pushing — coordinate with affected teams if the interface changed"
 
 ### INTENT_CONFLICT_RADAR
 

@@ -316,7 +316,7 @@
 All functionality accessible through single slash command `/zenith` with natural language input.
 
 ### NFR-2: Situation Detection Before Action
-Must run full diagnostic sequence and detect situation (S1-S9) before interpreting user request.
+Must run a minimal probe (git status + current branch) to detect situation (S1-S9) before interpreting user request. Additional commands run in a second phase scoped to the classified intent, after classification but before handler execution.
 
 ### NFR-3: State Read Before Every Operation
 Must read actual git state with commands, never trust user's description.

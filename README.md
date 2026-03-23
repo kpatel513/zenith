@@ -229,6 +229,7 @@ You don't have to memorize exact phrases. Zenith understands intent.
 | `check gitignore` | Audits .gitignore changes for rules that silently break other teams' folders |
 | `cherry-pick a fix` | Safely applies a specific commit from another branch, scoped to your folder with contamination check |
 | `find duplicates` | Searches the repo for similar filenames, classes, or functions before you build something that already exists |
+| `blast radius` | Shows every file in the repo that imports or references what you changed — surface cross-team impact before you push |
 | `conflict radar` | Shows open PRs that touch the same files as your current changes — surface conflicts before they happen |
 | `open worktree` | Checks out a branch in a new directory so you can work on two branches simultaneously without stashing |
 | `list worktrees` | Shows all active worktrees and their paths |

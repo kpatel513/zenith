@@ -562,6 +562,118 @@ git worktree prune
 
 ---
 
+## Jira API Commands
+
+### CMD_JIRA_CREATE
+```bash
+curl -s -X POST \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{payload}' \
+  "{jira_url}/rest/api/3/issue"
+```
+**Purpose:** Create a new Jira issue
+**Output:** JSON with `key` of created issue (HTTP 201 on success)
+**Used for:** INTENT_JIRA_CREATE
+
+### CMD_JIRA_GET
+```bash
+curl -s \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/issue/{ticket_key}"
+```
+**Purpose:** Fetch issue details
+**Output:** JSON with fields: summary, status, issuetype, assignee, description
+**Used for:** INTENT_JIRA_VIEW, INTENT_JIRA_UPDATE, INTENT_JIRA_BRANCH, INTENT_JIRA_CLOSE, INTENT_JIRA_DELETE
+
+### CMD_JIRA_UPDATE
+```bash
+curl -s -o /dev/null -w "%{http_code}" -X PUT \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{payload}' \
+  "{jira_url}/rest/api/3/issue/{ticket_key}"
+```
+**Purpose:** Update issue fields (summary, description)
+**Output:** HTTP 204 on success
+**Used for:** INTENT_JIRA_UPDATE
+
+### CMD_JIRA_DELETE
+```bash
+curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/issue/{ticket_key}"
+```
+**Purpose:** Permanently delete an issue
+**Output:** HTTP 204 on success
+**Used for:** INTENT_JIRA_DELETE
+
+### CMD_JIRA_TRANSITIONS
+```bash
+curl -s \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/issue/{ticket_key}/transitions"
+```
+**Purpose:** Fetch available status transitions for an issue
+**Output:** JSON with `transitions` array — each entry has `id` and `name`
+**Used for:** INTENT_JIRA_TRANSITION, INTENT_JIRA_CLOSE
+
+### CMD_JIRA_TRANSITION
+```bash
+curl -s -o /dev/null -w "%{http_code}" -X POST \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{"transition":{"id":"{transition_id}"}}' \
+  "{jira_url}/rest/api/3/issue/{ticket_key}/transitions"
+```
+**Purpose:** Execute a status transition on an issue
+**Output:** HTTP 204 on success
+**Used for:** INTENT_JIRA_TRANSITION, INTENT_JIRA_CLOSE
+
+### CMD_JIRA_ASSIGN
+```bash
+curl -s -o /dev/null -w "%{http_code}" -X PUT \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{"accountId":"{account_id}"}' \
+  "{jira_url}/rest/api/3/issue/{ticket_key}/assignee"
+```
+**Purpose:** Assign an issue to a user by account ID
+**Output:** HTTP 204 on success
+**Used for:** INTENT_JIRA_ASSIGN
+
+### CMD_JIRA_SEARCH
+```bash
+curl -s \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/search?jql={jql}&fields=summary,status,assignee,issuetype&maxResults=20"
+```
+**Purpose:** Search issues using JQL
+**Output:** JSON with `issues` array
+**Used for:** INTENT_JIRA_LIST
+
+### CMD_JIRA_ME
+```bash
+curl -s \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/myself"
+```
+**Purpose:** Get the authenticated user's account ID and display name
+**Output:** JSON with `accountId`, `displayName`, `emailAddress`
+**Used for:** INTENT_JIRA_ASSIGN (assign to self)
+
+### CMD_JIRA_USER_SEARCH
+```bash
+curl -s \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/user/search?query={query}&maxResults=10"
+```
+**Purpose:** Search for users by name or email
+**Output:** JSON array with `accountId`, `displayName`, `emailAddress` per user
+**Used for:** INTENT_JIRA_ASSIGN (assign to someone else)
+
+---
+
 ## Reference Usage
 
 **To reference a command in documentation:**

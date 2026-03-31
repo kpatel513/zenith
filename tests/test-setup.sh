@@ -49,21 +49,21 @@ make_source_repo() {
 run_setup() {
     # $1 = ZENITH_DIR override
     # $2 = ZENITH_REPO override
-    # $3 = GitHub username
-    # $4 = cursor install answer (y/n, default n)
-    # $5 = codex install answer (y/n, default n)
-    # $6 = gemini install answer (y/n, default n)
+    # $3 = GitHub username (passed via ZENITH_GITHUB_USERNAME, bypasses gh detection)
+    # $4 = CURSOR_HOME dir (create it to simulate Cursor installed; omit or /nonexistent to skip)
+    # $5 = CODEX_HOME dir
+    # $6 = GEMINI_HOME dir
     # GLOBAL_*_DIR vars point to subdirs of ZENITH_DIR to avoid touching real system dirs
-    # TTY=/dev/stdin lets tests inject input via heredoc instead of /dev/tty
-    local cursor_ans="${4:-n}"
-    local codex_ans="${5:-n}"
-    local gemini_ans="${6:-n}"
-    ZENITH_DIR="$1" ZENITH_REPO="$2" GLOBAL_COMMANDS_DIR="$1/global-commands" \
+    ZENITH_GITHUB_USERNAME="$3" \
+        ZENITH_DIR="$1" ZENITH_REPO="$2" \
+        CURSOR_HOME="${4:-/nonexistent/cursor}" \
+        CODEX_HOME="${5:-/nonexistent/codex}" \
+        GEMINI_HOME="${6:-/nonexistent/gemini}" \
+        GLOBAL_COMMANDS_DIR="$1/global-commands" \
         GLOBAL_CURSOR_RULES_DIR="$1/cursor-rules" \
         GLOBAL_CODEX_SKILLS_DIR="$1/codex-skills" \
         GLOBAL_GEMINI_COMMANDS_DIR="$1/gemini-commands" \
-        TTY=/dev/stdin bash "$REPO_ROOT/scripts/setup.sh" \
-        <<< "$(printf '%s\n%s\n%s\n%s\n' "$3" "$cursor_ans" "$codex_ans" "$gemini_ans")" 2>/dev/null
+        TTY=/dev/stdin bash "$REPO_ROOT/scripts/setup.sh" < /dev/null 2>/dev/null
 }
 
 # ---------------------------------------------------------------------------
@@ -210,23 +210,24 @@ test_symlink_target() {
 
 test_cursor_install() {
     echo
-    echo "test: cursor opt-in creates symlink; opt-out skips"
+    echo "test: cursor symlink created when cursor installed; skipped when not"
 
-    local source_repo zenith_dir
+    local source_repo zenith_dir fake_cursor
     source_repo=$(make_source_repo)
     zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
 
-    # opt-in: symlink should be created
-    run_setup "$zenith_dir" "$source_repo" "myuser" "y"
-    assert_symlink "$zenith_dir/cursor-rules/zenith.mdc" "cursor rule symlink created on opt-in"
-    rm -rf "$zenith_dir"
+    # cursor installed: symlink should be created
+    fake_cursor=$(mktemp -d)
+    run_setup "$zenith_dir" "$source_repo" "myuser" "$fake_cursor"
+    assert_symlink "$zenith_dir/cursor-rules/zenith.mdc" "cursor rule symlink created when cursor installed"
+    rm -rf "$zenith_dir" "$fake_cursor"
 
-    # opt-out: symlink should not be created
+    # cursor not installed: symlink should not be created
     zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
-    run_setup "$zenith_dir" "$source_repo" "myuser" "n"
+    run_setup "$zenith_dir" "$source_repo" "myuser"
     [ ! -e "$zenith_dir/cursor-rules/zenith.mdc" ] \
-        && pass "no cursor rule symlink on opt-out" \
-        || fail "no cursor rule symlink on opt-out"
+        && pass "no cursor rule symlink when cursor not installed" \
+        || fail "no cursor rule symlink when cursor not installed"
 
     rm -rf "$source_repo" "$zenith_dir"
 }
@@ -272,23 +273,24 @@ test_symlink_repair() {
 
 test_codex_install() {
     echo
-    echo "test: codex opt-in creates symlink; opt-out skips"
+    echo "test: codex symlink created when codex installed; skipped when not"
 
-    local source_repo zenith_dir
+    local source_repo zenith_dir fake_codex
     source_repo=$(make_source_repo)
     zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
 
-    # opt-in: symlink should be created
-    run_setup "$zenith_dir" "$source_repo" "myuser" "n" "y"
-    assert_symlink "$zenith_dir/codex-skills/zenith" "codex skill symlink created on opt-in"
-    rm -rf "$zenith_dir"
+    # codex installed: symlink should be created
+    fake_codex=$(mktemp -d)
+    run_setup "$zenith_dir" "$source_repo" "myuser" "" "$fake_codex"
+    assert_symlink "$zenith_dir/codex-skills/zenith" "codex skill symlink created when codex installed"
+    rm -rf "$zenith_dir" "$fake_codex"
 
-    # opt-out: symlink should not be created
+    # codex not installed: symlink should not be created
     zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
-    run_setup "$zenith_dir" "$source_repo" "myuser" "n" "n"
+    run_setup "$zenith_dir" "$source_repo" "myuser"
     [ ! -e "$zenith_dir/codex-skills/zenith" ] \
-        && pass "no codex skill symlink on opt-out" \
-        || fail "no codex skill symlink on opt-out"
+        && pass "no codex skill symlink when codex not installed" \
+        || fail "no codex skill symlink when codex not installed"
 
     rm -rf "$source_repo" "$zenith_dir"
 }
@@ -299,23 +301,24 @@ test_codex_install() {
 
 test_gemini_install() {
     echo
-    echo "test: gemini opt-in creates symlink; opt-out skips"
+    echo "test: gemini symlink created when gemini installed; skipped when not"
 
-    local source_repo zenith_dir
+    local source_repo zenith_dir fake_gemini
     source_repo=$(make_source_repo)
     zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
 
-    # opt-in: symlink should be created
-    run_setup "$zenith_dir" "$source_repo" "myuser" "n" "n" "y"
-    assert_symlink "$zenith_dir/gemini-commands/zenith.toml" "gemini command symlink created on opt-in"
-    rm -rf "$zenith_dir"
+    # gemini installed: symlink should be created
+    fake_gemini=$(mktemp -d)
+    run_setup "$zenith_dir" "$source_repo" "myuser" "" "" "$fake_gemini"
+    assert_symlink "$zenith_dir/gemini-commands/zenith.toml" "gemini command symlink created when gemini installed"
+    rm -rf "$zenith_dir" "$fake_gemini"
 
-    # opt-out: symlink should not be created
+    # gemini not installed: symlink should not be created
     zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
-    run_setup "$zenith_dir" "$source_repo" "myuser" "n" "n" "n"
+    run_setup "$zenith_dir" "$source_repo" "myuser"
     [ ! -e "$zenith_dir/gemini-commands/zenith.toml" ] \
-        && pass "no gemini command symlink on opt-out" \
-        || fail "no gemini command symlink on opt-out"
+        && pass "no gemini command symlink when gemini not installed" \
+        || fail "no gemini command symlink when gemini not installed"
 
     rm -rf "$source_repo" "$zenith_dir"
 }

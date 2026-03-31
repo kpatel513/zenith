@@ -268,6 +268,155 @@ Same phrase in different situations should produce different behavior.
 
 ---
 
+---
+
+## Jira — First-time setup
+
+**Setup:** Fresh install, `~/.zenith/.global-config` has no `[jira]` section, `.agent-config` has no `[jira]` section.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith my tickets` | Triggers global Jira setup (URL, email, token prompts), then repo setup (project key), then runs the list |
+| `/zenith create a ticket` | Same setup flow, then proceeds to ticket creation |
+
+**Setup:** Global config has `[jira]` credentials but `.agent-config` has no `[jira]` section.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith my tickets` | Skips global setup, triggers repo setup only (project key prompt), then runs the list |
+
+**Setup:** Both global and repo Jira configs present but `JIRA_API_TOKEN` not in global config and not in env.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith my tickets` | Blocked: "blocked — jira API token not set", no API call made |
+
+---
+
+## Jira — INTENT_JIRA_CREATE
+
+**Setup:** Valid Jira config. On any branch.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith create a story for adding export to CSV` | Asks for summary (pre-filled from phrase), epic key (optional), description (optional), shows preview, confirms, creates, prints ticket key + URL |
+| `/zenith create a bug` | Asks for summary, sets type to Bug |
+| `/zenith create an epic` | Sets type to Epic, does NOT ask for parent epic key |
+| `/zenith create a task in INFRA` | Uses INFRA as project key, overriding repo default |
+| `/zenith create a ticket` (API returns error) | Prints error in pipe format, stops |
+
+---
+
+## Jira — INTENT_JIRA_VIEW
+
+**Setup:** Valid Jira config.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith show ticket AIE-123` | Fetches and displays: key, summary, type, status, assignee |
+| `/zenith what's AIE-123` | Same — parses ticket key from phrase |
+| `/zenith show ticket` (no key given) | Asks "Ticket key (e.g. AIE-123):" before fetching |
+| `/zenith show ticket AIE-9999` (non-existent) | Prints "ticket not found", stops |
+
+---
+
+## Jira — INTENT_JIRA_LIST
+
+**Setup:** Valid Jira config. You have open tickets assigned to you.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith my tickets` | Lists open tickets in repo's project, one per line: key, type, status, summary |
+| `/zenith my INFRA tickets` | Uses INFRA as project, overriding repo default |
+| `/zenith my tickets` (none assigned) | Prints "no open tickets — none assigned to you in {project}" |
+
+---
+
+## Jira — INTENT_JIRA_UPDATE
+
+**Setup:** Valid Jira config. Ticket AIE-123 exists.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith update ticket AIE-123` | Fetches current values, shows them, prompts for new summary and description, confirms, updates |
+| Enter to skip both fields | Prints "nothing changed — no updates made", stops |
+| `/zenith rename ticket AIE-123 to new title` | Updates summary only, skips description prompt |
+
+---
+
+## Jira — INTENT_JIRA_TRANSITION
+
+**Setup:** Valid Jira config. Ticket AIE-123 exists in "To Do" status.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith move AIE-123 to in progress` | Shows current → target status, confirms, transitions |
+| `/zenith start AIE-123` | Maps "start" → In Progress |
+| `/zenith move AIE-123 to review` | Maps "review" → In Review |
+| `/zenith mark AIE-123 done` | Maps "done" → Done |
+| `/zenith move AIE-123` (no target) | Lists available transitions, asks which one |
+| Target transition not available for current status | Prints "transition not available" error, stops |
+
+---
+
+## Jira — INTENT_JIRA_ASSIGN
+
+**Setup:** Valid Jira config. Ticket AIE-123 exists.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith assign AIE-123 to me` | Calls /myself to get accountId, shows preview "assigning to {your name}", confirms, assigns |
+| `/zenith take ticket AIE-123` | Same as above |
+| `/zenith assign AIE-123 to bob` | Searches users for "bob", if one result: confirms and assigns; if multiple: shows list |
+| Search returns no users | Prints "no users found", stops |
+
+---
+
+## Jira — INTENT_JIRA_BRANCH
+
+**Setup:** Valid Jira config. On base branch, clean working tree.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith branch from ticket AIE-123` | Fetches summary, slugifies, proposes `AIE-123-{slug}`, confirms, creates and pushes branch |
+| `/zenith start work on AIE-123` | Same behavior |
+
+**Setup:** On a feature branch with uncommitted changes.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith branch from ticket AIE-123` | Blocked: "cannot create branch — uncommitted changes exist" |
+
+---
+
+## Jira — INTENT_JIRA_CLOSE
+
+**Setup:** Valid Jira config. Ticket AIE-123 in "In Progress".
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith close ticket AIE-123` | Shows summary + status → Done, confirms, transitions |
+
+**Setup:** Ticket AIE-123 already in "Done".
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith close ticket AIE-123` | Prints "already closed — current status: Done", stops |
+
+---
+
+## Jira — INTENT_JIRA_DELETE
+
+**Setup:** Valid Jira config. Ticket AIE-123 exists.
+
+| Phrase | Expected |
+|--------|----------|
+| `/zenith delete ticket AIE-123` | Shows summary and status, warns "cannot be undone", asks user to TYPE the ticket key |
+| User types `AIE-123` exactly | Deletes, prints "✓ AIE-123 deleted" |
+| User types anything else (e.g. `y`, `yes`) | Prints "cancelled — ticket key did not match", no deletion |
+
+---
+
 ## Output Format
 
 Verify that output format matches the spec in `zenith.md`:

@@ -91,95 +91,64 @@ Zenith knows which folder is yours. It only commits your files, warns you if any
 
 ## Install
 
-### Install as an agent skill (Claude Code, Codex CLI, Gemini CLI, Cursor)
-
-Zenith follows the open agent skills standard. Any compatible runtime can install it with one command:
-
-```bash
-git clone https://github.com/kpatel513/zenith ~/.agents/skills/zenith
-```
-
-The runtime reads `ZENITH.md` from the cloned directory. No setup script required.
-
----
-
-### Step 1 — Install Zenith globally (once per machine)
-
-Run this from your terminal — anywhere:
+### Step 1 — Run the installer (once per machine)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kpatel513/zenith/main/scripts/setup.sh | bash
 ```
 
-This installs Zenith to `~/.zenith` and asks two questions:
+That's it. The installer:
+- Detects your GitHub username from `gh` (asks only if `gh` isn't authenticated)
+- Installs adapters for any tools it finds — Cursor, Codex CLI, Gemini CLI — automatically
+- Sets up a daily background update so you always have the latest version
 
-```
-GitHub username:          [your github username]
-Install Cursor rule? [y/N]: [y if you use Cursor, N otherwise]
-```
-
-That's it. Zenith is installed globally. You don't configure repos here — that happens automatically the first time you use `/zenith` or `@zenith` in each repo.
-
----
-
-### Step 2 — Use /zenith in a repo (configures itself on first run)
-
-Open Claude Code from inside any repo and run any `/zenith` command:
+### Step 2 — Open Claude Code in a repo and run any /zenith command
 
 ```
 /zenith start new work
 ```
 
-If this is the first time Zenith has been used in that repo, it detects there's no config and walks you through 4 quick questions before continuing:
+First time in a repo, Zenith detects your org, repo, and base branch from git and asks one question:
 
 ```
-first-time setup — no config found for this repo
-│ detected: /Users/alice/code/company-repo
-│ answering 4 questions configures Zenith for this repo permanently
-│ your answers are saved locally and never committed to GitHub
+setting up zenith — detected from your repo
+│ org: acme-corp   repo: company-repo   branch: main   user: alice
 
-Your project folder (or . for whole repo): team-ml/recommendations
-GitHub organization:                       acme-corp
-GitHub repository:                         company-repo
-Base branch [main]:                        main
+  your folder in this repo [. for whole repo]: team-ml/recommendations
 
   ✓ config saved  /Users/alice/code/company-repo/.agent-config
   ✓ gitignore     .agent-config will not be committed
 ```
 
-From that point on, `/zenith` in that repo reads the saved config and runs without asking again.
+Done. Every subsequent `/zenith` command in that repo runs without asking anything.
 
-Adding a new repo later? Just open Claude Code in that repo and run any `/zenith` command — same first-time setup.
+**Adding a new repo?** Open Claude Code in that repo and run any `/zenith` command — same one-question setup.
 
----
-
-**Verify it worked**
-
-Open Claude Code (from any directory) and run:
+**Verify it worked:**
 
 ```
 /zenith help
 ```
 
-You'll see a table of everything Zenith can do.
-
 ---
 
-**What setup does**
+**What the installer puts on your machine**
 
-- Installs Zenith to `~/.zenith` on your machine
-- Creates `~/.claude/commands/zenith.md` — makes `/zenith` available in every Claude Code session
-- Creates `~/.cursor/rules/zenith.mdc` (if you opt in) — makes `@zenith` available in every Cursor session
-- Writes `~/.zenith/.global-config` with your GitHub username — pre-fills it for every repo you configure
-- Installs a daily background update so you always have the latest version
+| What | Where | Purpose |
+|------|-------|---------|
+| Zenith files | `~/.zenith/` | The skill definition, updated daily |
+| Claude Code command | `~/.claude/commands/zenith.md` | Makes `/zenith` work in every session |
+| Cursor rule | `~/.cursor/rules/zenith.mdc` | Makes `@zenith` work (if Cursor is installed) |
+| Codex skill | `~/.codex/skills/zenith/` | Makes `$zenith` work (if Codex CLI is installed) |
+| Global config | `~/.zenith/.global-config` | Stores your GitHub username and Jira credentials |
 
-New machine or reinstalling? The setup script is safe to re-run. To change your username after setup, edit `~/.zenith/.global-config` directly.
+New machine or reinstalling? The installer is safe to re-run.
 
 ---
 
 ## Using Zenith in Cursor
 
-Works via `@zenith`. Run `setup.sh` and answer `y` to the Cursor prompt — that's it. Already installed? One-liner to add Cursor support manually.
+Works via `@zenith`. If Cursor is installed when you run the installer, the adapter is set up automatically. Already installed Zenith but added Cursor later? One-liner to add Cursor support manually:
 
 → [Full Cursor setup and model compatibility](docs/cursor.md)
 
@@ -288,6 +257,51 @@ Zenith tracks your workflow events and surfaces nudges when a mistake recurs —
 
 ---
 
+## Jira integration
+
+Zenith can create, view, update, and close Jira tickets without leaving Claude Code.
+
+```
+/zenith create a bug ticket for the login timeout issue
+/zenith show ticket AIE-234
+/zenith my tickets
+/zenith move AIE-234 to in progress
+/zenith branch from ticket AIE-234
+/zenith close ticket AIE-234
+```
+
+**Setup — runs once, automatically on first Jira command:**
+
+```
+jira setup — one-time credential configuration
+│ saved globally and reused across all repos
+
+  atlassian URL [your-org.atlassian.net]:
+  email [alice@company.com]:
+  api token (https://id.atlassian.net/manage-profile/security/api-tokens):
+
+jira repo setup — configure this repo's default project
+  jira project key (e.g. AIE, INFRA, PLAT):
+
+  ✓ jira ready — https://your-org.atlassian.net, project AIE
+```
+
+Credentials are saved to `~/.zenith/.global-config` and reused across every repo. The default project is saved per-repo in `.agent-config`. You can override it inline: `/zenith my INFRA tickets`.
+
+| Say this | What happens |
+|----------|-------------|
+| `create a ticket` | Create a story, task, bug, or epic — asks for type, summary, epic, description |
+| `show ticket AIE-123` | Display ticket details: status, type, assignee |
+| `my tickets` | List open tickets assigned to you in this repo's project |
+| `update ticket summary` | Edit the summary or description of a ticket |
+| `move ticket to in progress` | Transition a ticket to any status |
+| `assign ticket to me` | Assign a ticket to yourself or search for a teammate |
+| `branch from ticket AIE-123` | Create a git branch named after the ticket — Jira links it automatically |
+| `close ticket AIE-123` | Transition ticket to Done |
+| `delete ticket AIE-123` | Permanently delete a ticket (requires typing the ticket key to confirm) |
+
+---
+
 ## Claude Code safety layer
 
 Claude Code sees the whole codebase and makes reasonable calls — but it doesn't know your monorepo conventions. Zenith intercepts at commit and push time to catch scope violations, generated files, hardcoded paths, and conflict resolutions that silently discard correct code.
@@ -309,9 +323,12 @@ base_branch   = "main"
 [user]
 project_folder  = "team-ml/recommendations"
 github_username = "alice"
+
+[jira]
+jira_project = "AIE"
 ```
 
-Edit this file any time to update your settings.
+Edit this file any time to update your settings. Jira credentials (URL, email, token) are stored in `~/.zenith/.global-config`, not here.
 
 ---
 
@@ -320,7 +337,7 @@ Edit this file any time to update your settings.
 Zenith updates itself. A background job runs once a day:
 
 ```
-0 9 * * * cd ~/.zenith && git pull origin main --quiet
+0 9 * * * cd ~/.zenith && git fetch origin main --quiet && git reset --hard origin/main --quiet
 ```
 
 Nothing to maintain.

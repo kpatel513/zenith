@@ -79,107 +79,91 @@ git clone "$ZENITH_REPO" "$ZENITH_DIR" 2>/dev/null || {
 echo "✓ Cloned successfully"
 echo
 
-# Collect configuration
-echo "Configuration"
-echo "-------------"
-echo
+# Auto-detect GitHub username from gh CLI; ask only if that fails.
+# ZENITH_GITHUB_USERNAME overrides detection (used by tests and scripted installs).
+if [ -n "${ZENITH_GITHUB_USERNAME:-}" ]; then
+    GITHUB_USERNAME="$ZENITH_GITHUB_USERNAME"
+else
+    GITHUB_USERNAME=$(gh api user --jq '.login' 2>/dev/null)
+    if [ -z "$GITHUB_USERNAME" ]; then
+        read -rp "GitHub username: " GITHUB_USERNAME <"$TTY"
+    fi
+fi
 
-read -rp "GitHub username: " GITHUB_USERNAME <"$TTY"
-read -rp "Install Cursor rule? [y/N]: " INSTALL_CURSOR <"$TTY"
-read -rp "Install Codex skill? [y/N]: " INSTALL_CODEX <"$TTY"
-read -rp "Install Gemini command? [y/N]: " INSTALL_GEMINI <"$TTY"
-
-echo
+# Auto-detect installed tools — install adapters silently if the tool is present.
+# *_HOME vars are overridable for tests to avoid touching real system directories.
+CURSOR_HOME="${CURSOR_HOME:-$HOME/.cursor}"
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+GEMINI_HOME="${GEMINI_HOME:-$HOME/.gemini}"
+[ -d "$CURSOR_HOME" ] && INSTALL_CURSOR=y || INSTALL_CURSOR=n
+[ -d "$CODEX_HOME" ]  && INSTALL_CODEX=y  || INSTALL_CODEX=n
+[ -d "$GEMINI_HOME" ] && INSTALL_GEMINI=y || INSTALL_GEMINI=n
 
 # Symlink zenith.md globally so /zenith works in any Claude Code session
-if [ ! -d "$GLOBAL_COMMANDS_DIR" ]; then
-    mkdir -p "$GLOBAL_COMMANDS_DIR"
-fi
+mkdir -p "$GLOBAL_COMMANDS_DIR"
 GLOBAL_SYMLINK="$GLOBAL_COMMANDS_DIR/zenith.md"
 if [ -L "$GLOBAL_SYMLINK" ] || [ -f "$GLOBAL_SYMLINK" ]; then
     rm -f "$GLOBAL_SYMLINK"
 fi
-echo "Creating global symlink to zenith.md..."
 ln -s "$ZENITH_DIR/adapters/claude-command.md" "$GLOBAL_SYMLINK"
-echo "✓ Symlinked (global — /zenith works from any directory)"
 
-# Install Cursor rule (global, opt-in)
+# Install Cursor rule if Cursor is installed
 if [[ "${INSTALL_CURSOR:-n}" =~ ^[Yy]$ ]]; then
     CURSOR_RULE_TARGET="$GLOBAL_CURSOR_RULES_DIR/zenith.mdc"
     CURSOR_RULE_SOURCE="$ZENITH_DIR/.cursor/rules/zenith.mdc"
     mkdir -p "$GLOBAL_CURSOR_RULES_DIR"
     if [ ! -L "$CURSOR_RULE_TARGET" ] && [ ! -f "$CURSOR_RULE_TARGET" ]; then
         ln -s "$CURSOR_RULE_SOURCE" "$CURSOR_RULE_TARGET"
-        echo "✓ Symlinked (global — @zenith works from any Cursor session)"
-    else
-        echo "✓ Cursor rule already installed"
     fi
 fi
 
-# Install Codex skill (global, opt-in)
+# Install Codex skill if Codex CLI is installed
 if [[ "${INSTALL_CODEX:-n}" =~ ^[Yy]$ ]]; then
     CODEX_SKILL_TARGET="$GLOBAL_CODEX_SKILLS_DIR/zenith"
     CODEX_SKILL_SOURCE="$ZENITH_DIR/adapters/codex-skill"
     mkdir -p "$GLOBAL_CODEX_SKILLS_DIR"
     if [ ! -L "$CODEX_SKILL_TARGET" ] && [ ! -e "$CODEX_SKILL_TARGET" ]; then
         ln -s "$CODEX_SKILL_SOURCE" "$CODEX_SKILL_TARGET"
-        echo "✓ Symlinked (global — \$zenith works from any Codex session)"
-    else
-        echo "✓ Codex skill already installed"
     fi
 fi
 
-# Install Gemini command (global, opt-in)
+# Install Gemini command if Gemini CLI is installed
 if [[ "${INSTALL_GEMINI:-n}" =~ ^[Yy]$ ]]; then
     GEMINI_CMD_TARGET="$GLOBAL_GEMINI_COMMANDS_DIR/zenith.toml"
     GEMINI_CMD_SOURCE="$ZENITH_DIR/adapters/gemini-command.toml"
     mkdir -p "$GLOBAL_GEMINI_COMMANDS_DIR"
     if [ ! -L "$GEMINI_CMD_TARGET" ] && [ ! -f "$GEMINI_CMD_TARGET" ]; then
         ln -s "$GEMINI_CMD_SOURCE" "$GEMINI_CMD_TARGET"
-        echo "✓ Symlinked (global — /zenith works from any Gemini CLI session)"
-    else
-        echo "✓ Gemini command already installed"
     fi
 fi
 
 # Write global config
 GLOBAL_CONFIG="$ZENITH_DIR/.global-config"
-echo "Writing global config..."
 cat > "$GLOBAL_CONFIG" <<EOF
 [user]
 github_username = "$GITHUB_USERNAME"
 EOF
-echo "✓ Written to $GLOBAL_CONFIG"
 
 # Install cron job for automatic updates
-echo "Installing automatic update cron job..."
 CRON_CMD="0 9 * * * cd $ZENITH_DIR && git fetch origin main --quiet && git reset --hard origin/main --quiet && bash $ZENITH_DIR/scripts/setup.sh 2>/dev/null"
-(crontab -l 2>/dev/null | grep -v "zenith"; echo "$CRON_CMD") | crontab - 2>/dev/null || {
-    echo "Warning: Could not install cron job. You can add it manually:"
-    echo "$CRON_CMD"
-}
-echo "✓ Installed (runs daily at 9am)"
+(crontab -l 2>/dev/null | grep -v "zenith"; echo "$CRON_CMD") | crontab - 2>/dev/null || true
 
 # Mark installation as complete (used to detect partial installs on re-run)
 touch "$ZENITH_DIR/.setup-complete"
 
 echo
-echo "Installation Complete"
-echo "====================="
-echo
-echo "Location:    $ZENITH_DIR"
-echo "Username:    $GITHUB_USERNAME"
-echo "Claude Code: /zenith <anything>"
+echo "✓ installed   $ZENITH_DIR"
+echo "✓ command     /zenith  (Claude Code)"
 if [[ "${INSTALL_CURSOR:-n}" =~ ^[Yy]$ ]]; then
-    echo "Cursor:      @zenith <anything>"
+    echo "✓ command     @zenith  (Cursor)"
 fi
 if [[ "${INSTALL_CODEX:-n}" =~ ^[Yy]$ ]]; then
-    echo "Codex CLI:   \$zenith <anything>"
+    echo "✓ command     \$zenith  (Codex CLI)"
 fi
 if [[ "${INSTALL_GEMINI:-n}" =~ ^[Yy]$ ]]; then
-    echo "Gemini CLI:  /zenith <anything>"
+    echo "✓ command     /zenith  (Gemini CLI)"
 fi
+echo "✓ updates     daily at 9am"
 echo
-echo "Open Claude Code from inside any repo and run /zenith to get started."
-echo "Zenith will configure itself for that repo on first use."
+echo "Open Claude Code in any repo and run /zenith to get started."
 echo

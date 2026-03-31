@@ -51,30 +51,31 @@ Parse `.agent-config` for:
 
 If `.agent-config` not found: Run first-time repo setup — do not stop.
 
-Print:
-```
-first-time setup — no config found for this repo
-│ detected: {REPO_ROOT}
-│ answering 4 questions configures Zenith for this repo permanently
-│ your answers are saved locally and never committed to GitHub
-```
-
-Read global config for username:
+Auto-detect repo values from local git state — no network calls required:
 ```bash
-grep "github_username" ~/.zenith/.global-config 2>/dev/null | cut -d'"' -f2
+REMOTE_URL=$(git remote get-url origin 2>/dev/null)
+github_org=$(echo "$REMOTE_URL" | sed -E 's|.*github\.com[/:]([^/]+)/.*|\1|')
+github_repo=$(echo "$REMOTE_URL" | sed -E 's|.*github\.com[/:]([^/]+)/([^/.]+)(\.git)?$|\2|')
+# Use local ref set at clone time — no network needed
+base_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|.*/||')
+[ -z "$base_branch" ] && base_branch="main"
+# Try gh CLI; fall back to global config
+github_username=$(gh api user --jq '.login' 2>/dev/null)
+[ -z "$github_username" ] && github_username=$(grep "github_username" ~/.zenith/.global-config 2>/dev/null | cut -d'"' -f2)
 ```
 
-If username found, use it silently. If not found, also ask: "GitHub username:"
+Print detected values. Ask only what could not be detected:
+```
+setting up zenith — detected from your repo
+│ org: {github_org}   repo: {github_repo}   branch: {base_branch}
 
-Ask in order:
-- "Your project folder (or . for whole repo):"
-- "GitHub organization:"
-- "GitHub repository:"
-- "Base branch [main]:" — default to `main` if left empty
+  your folder in this repo [. for whole repo]:
+  github username: [shown only if gh detection failed, otherwise set silently]
+```
 
 Write config:
 ```bash
-cat > "{REPO_ROOT}/.agent-config" <<EOF
+cat > "$REPO_ROOT/.agent-config" <<EOF
 [repo]
 github_org = "{github_org}"
 github_repo = "{github_repo}"
@@ -88,7 +89,7 @@ EOF
 
 Add to `.gitignore`:
 ```bash
-grep -q "^\.agent-config$" "{REPO_ROOT}/.gitignore" 2>/dev/null || echo ".agent-config" >> "{REPO_ROOT}/.gitignore"
+grep -q "^\.agent-config$" "$REPO_ROOT/.gitignore" 2>/dev/null || echo ".agent-config" >> "$REPO_ROOT/.gitignore"
 ```
 
 Print:
@@ -97,7 +98,7 @@ Print:
   ✓ gitignore     .agent-config will not be committed
 ```
 
-Continue — use the collected values as the parsed config. Do not stop.
+Continue — use the detected and collected values as the parsed config. Do not stop.
 
 **Validate config after parsing:**
 
@@ -460,6 +461,15 @@ Map user's request to ONE intent. Use both request text AND situation to classif
 - `INTENT_WORKTREE_ADD` - open branch in new worktree, second checkout, work on two branches at once, review PR without losing changes
 - `INTENT_WORKTREE_LIST` - list worktrees, show worktrees, how many worktrees do I have
 - `INTENT_WORKTREE_REMOVE` - remove worktree, done with worktree, clean up worktree, delete worktree
+- `INTENT_JIRA_CREATE` - create jira ticket, new ticket, new story, new task, new bug, new epic, create issue
+- `INTENT_JIRA_VIEW` - show ticket, view ticket, what's AIE-123, open ticket, ticket details, look up ticket
+- `INTENT_JIRA_LIST` - list tickets, my tickets, show board, jira backlog, assigned to me, open tickets
+- `INTENT_JIRA_UPDATE` - update ticket, change ticket summary, edit ticket description, rename ticket
+- `INTENT_JIRA_TRANSITION` - move ticket to in progress, mark done, move to review, start ticket, change ticket status
+- `INTENT_JIRA_ASSIGN` - assign ticket, assign to me, assign AIE-123 to someone, take ticket
+- `INTENT_JIRA_BRANCH` - create branch for ticket, start work on AIE-123, branch from ticket, checkout ticket
+- `INTENT_JIRA_CLOSE` - close ticket, mark ticket done, resolve ticket, complete ticket
+- `INTENT_JIRA_DELETE` - delete ticket, remove ticket, delete issue
 - `INTENT_HELP` - help, what can you do, what commands exist
 - `INTENT_UNKNOWN` - cannot determine intent
 
@@ -510,6 +520,15 @@ conflict radar            | Show open PRs that touch the same files as your curr
 open worktree             | Check out a branch in a new directory — switch contexts without stashing
 list worktrees            | Show all active worktrees and their paths
 remove worktree           | Delete a linked worktree directory
+create a ticket           | Create a Jira story, task, bug, or epic in your project
+show ticket AIE-123       | Display ticket details: summary, status, type, assignee
+my tickets                | List open Jira tickets assigned to you
+update ticket summary     | Edit the summary or description of a ticket
+move ticket to in progress| Transition a ticket to a new status
+assign ticket to me       | Assign a Jira ticket to yourself or a teammate
+branch from ticket        | Create a git branch named after a Jira ticket
+close ticket              | Transition a ticket to Done
+delete ticket             | Permanently delete a Jira ticket (requires confirmation)
 help                      | Show this table
 ```
 
@@ -3348,6 +3367,483 @@ Print:
 
 Next: "next: run /zenith cleanup branches to delete {branch} if you're done with it"
 
+### INTENT_JIRA_CREATE
+
+Parse Jira config:
+```bash
+jira_url=$(grep "jira_url" ~/.zenith/.global-config 2>/dev/null | cut -d'"' -f2)
+jira_email=$(grep "jira_email" ~/.zenith/.global-config 2>/dev/null | cut -d'"' -f2)
+_stored_token=$(grep "jira_api_token" ~/.zenith/.global-config 2>/dev/null | cut -d'"' -f2)
+[ -n "$_stored_token" ] && JIRA_API_TOKEN="$_stored_token"
+jira_project=$(grep "jira_project" "$REPO_ROOT/.agent-config" 2>/dev/null | cut -d'"' -f2)
+```
+
+If `jira_url`, `jira_email`, or `JIRA_API_TOKEN` empty → run global Jira setup (see references/jira-ops.md). If `jira_project` empty → run repo Jira setup. After setup, continue.
+
+Build auth header:
+```bash
+JIRA_AUTH=$(printf '%s:%s' "$jira_email" "$JIRA_API_TOKEN" | base64 | tr -d '\n')
+```
+
+Determine issue type from the user's request:
+- "epic" → Epic
+- "bug" or "defect" → Bug
+- "task" → Task
+- anything else (default) → Story
+
+If type is ambiguous, ask: "Issue type — Story, Task, Bug, or Epic:"
+
+Ask for required fields:
+```
+  summary:
+```
+
+Ask for optional fields (user can press enter to skip):
+```
+  parent epic key (e.g. AIE-42, or enter to skip):
+  description (or enter to skip):
+```
+
+For Epic type: do not ask for parent epic key.
+
+Use `jira_project` as the project key unless user explicitly specified a different project in the request.
+
+Show preview and confirm:
+```
+creating ticket — {jira_project}
+│ type:    {issue_type}
+│ summary: {ticket_summary}
+│ epic:    {ticket_key} (omit line if no epic)
+│ desc:    {description} (omit line if no description)
+
+Create? [y/n]
+```
+
+Build JSON payload per references/jira-ops.md JSON Payload Patterns. Omit `parent` if no epic key. Omit `description` if skipped.
+
+Execute:
+```bash
+BODY=$(curl -s -X POST \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{payload}' \
+  "{jira_url}/rest/api/3/issue")   # CMD_JIRA_CREATE
+```
+
+Check for error:
+```bash
+echo "$BODY" | grep -q '"errorMessages"\|"errors"'
+```
+If error found, print error in pipe format and stop.
+
+Parse ticket key:
+```bash
+TICKET_KEY=$(echo "$BODY" | grep -o '"key":"[^"]*"' | head -1 | cut -d'"' -f4)
+```
+
+Print:
+```
+  ✓ {ticket_key}  {ticket_summary}
+    {jira_url}/browse/{ticket_key}
+```
+
+next: "next: run /zenith jira branch to create a branch for {ticket_key}"
+
+---
+
+### INTENT_JIRA_VIEW
+
+Parse Jira config (same block as INTENT_JIRA_CREATE). Build `$JIRA_AUTH`.
+
+Extract ticket key from request using pattern `[A-Z]+-[0-9]+`. If not found, ask: "Ticket key (e.g. AIE-123):"
+
+Execute:
+```bash
+BODY=$(curl -s \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/issue/{ticket_key}")   # CMD_JIRA_GET
+```
+
+Check for error. If HTTP 404 pattern found: "ticket not found — {ticket_key} does not exist in {jira_url}". Stop.
+
+Parse fields:
+```bash
+SUMMARY=$(echo "$BODY" | grep -o '"summary":"[^"]*"' | head -1 | cut -d'"' -f4)
+STATUS=$(echo "$BODY" | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
+ISSUE_TYPE=$(echo "$BODY" | grep -o '"name":"[^"]*"' | sed -n '2p' | cut -d'"' -f4)
+ASSIGNEE=$(echo "$BODY" | grep -o '"displayName":"[^"]*"' | head -1 | cut -d'"' -f4)
+[ -z "$ASSIGNEE" ] && ASSIGNEE="unassigned"
+```
+
+Print:
+```
+{ticket_key} — {SUMMARY}
+│ type:     {ISSUE_TYPE}
+│ status:   {STATUS}
+│ assignee: {ASSIGNEE}
+
+  {jira_url}/browse/{ticket_key}
+```
+
+next: "next: run /zenith jira transition to move status, or /zenith jira branch to start work"
+
+---
+
+### INTENT_JIRA_LIST
+
+Parse Jira config (same block as INTENT_JIRA_CREATE). Build `$JIRA_AUTH`.
+
+Determine project: extract `[A-Z]+` project prefix from request if specified (e.g. "my INFRA tickets"), otherwise use `jira_project`.
+
+Build JQL:
+```
+assignee = currentUser() AND project = {project} AND statusCategory != Done ORDER BY updated DESC
+```
+
+URL-encode the JQL (replace spaces with `%20`, `=` with `%3D`, `!=` with `%21%3D`, `"` with `%22`). Execute:
+```bash
+BODY=$(curl -s \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/search?jql={encoded_jql}&fields=summary,status,assignee,issuetype&maxResults=20")   # CMD_JIRA_SEARCH
+```
+
+Check for error.
+
+If no issues returned:
+```
+no open tickets — none assigned to you in {project}
+│ tickets with status Done are excluded
+```
+Stop.
+
+Print table — one line per issue, pipe-separated:
+```
+{project} tickets — assigned to you
+│ {ticket_key}  {issue_type}  {status}  {summary}
+│ {ticket_key}  {issue_type}  {status}  {summary}
+│ ...
+```
+
+next: "next: run /zenith jira view {first_ticket_key} for details"
+
+---
+
+### INTENT_JIRA_UPDATE
+
+Parse Jira config (same block as INTENT_JIRA_CREATE). Build `$JIRA_AUTH`.
+
+Extract ticket key from request. If not found, ask: "Ticket key (e.g. AIE-123):"
+
+Fetch current values:
+```bash
+BODY=$(curl -s \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/issue/{ticket_key}")   # CMD_JIRA_GET
+```
+
+Check for error.
+
+Parse current summary and description. Show current values and ask what to change:
+```
+updating {ticket_key}
+│ current summary: {SUMMARY}
+
+  new summary (enter to keep):
+  new description (enter to keep):
+```
+
+If user leaves both empty: "nothing changed — no updates made". Stop.
+
+Build payload containing only the fields the user changed:
+- Summary changed: `{"fields":{"summary":"{new_summary}"}}`
+- Description changed: use ADF format from references/jira-ops.md
+- Both changed: combine both fields in one payload
+
+Show confirmation:
+```
+updating — {ticket_key}
+│ summary: {new_summary} (or "unchanged")
+│ description: updated (or "unchanged")
+
+Update? [y/n]
+```
+
+Execute:
+```bash
+STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{payload}' \
+  "{jira_url}/rest/api/3/issue/{ticket_key}")   # CMD_JIRA_UPDATE
+```
+
+If `STATUS_CODE` is not 204: print error and stop.
+
+Print: `  ✓ {ticket_key} updated`
+
+next: "next: run /zenith jira view {ticket_key} to confirm"
+
+---
+
+### INTENT_JIRA_TRANSITION
+
+Parse Jira config (same block as INTENT_JIRA_CREATE). Build `$JIRA_AUTH`.
+
+Extract ticket key from request. If not found, ask: "Ticket key (e.g. AIE-123):"
+
+Fetch current status:
+```bash
+BODY=$(curl -s \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/issue/{ticket_key}")   # CMD_JIRA_GET
+```
+
+Parse `CURRENT_STATUS` from response.
+
+Fetch available transitions:
+```bash
+TRANSITIONS=$(curl -s \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/issue/{ticket_key}/transitions")   # CMD_JIRA_TRANSITIONS
+```
+
+Map user's words to target transition name (case-insensitive):
+- "in progress", "start", "working", "begin" → "In Progress"
+- "in review", "review", "pr", "under review" → "In Review"
+- "done", "close", "complete", "finish", "resolve" → "Done"
+- "to do", "backlog", "reopen", "open" → "To Do"
+
+If no target found in the request, list available transitions and ask: "Move to:"
+
+Find matching transition ID from `$TRANSITIONS` response (case-insensitive name match).
+
+If no match: "transition not available — {target} is not a valid transition for {ticket_key} in its current state ({CURRENT_STATUS})". Stop.
+
+Preview:
+```
+moving ticket — {ticket_key}
+│ {CURRENT_STATUS} → {TARGET_STATUS}
+
+Confirm? [y/n]
+```
+
+Execute:
+```bash
+STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{"transition":{"id":"{TRANSITION_ID}"}}' \
+  "{jira_url}/rest/api/3/issue/{ticket_key}/transitions")   # CMD_JIRA_TRANSITION
+```
+
+If not 204: print error and stop.
+
+Print: `  ✓ {ticket_key}  {CURRENT_STATUS} → {TARGET_STATUS}`
+
+next: if TARGET_STATUS is "In Progress" → "next: run /zenith jira branch to create a branch for this ticket"
+      if TARGET_STATUS is "Done" → "next: run /zenith cleanup branches to remove the feature branch"
+      otherwise → "next: run /zenith jira view {ticket_key} to confirm"
+
+---
+
+### INTENT_JIRA_ASSIGN
+
+Parse Jira config (same block as INTENT_JIRA_CREATE). Build `$JIRA_AUTH`.
+
+Extract ticket key from request. If not found, ask: "Ticket key (e.g. AIE-123):"
+
+Determine assignee:
+- If request says "assign to me", "take", "claim", or similar: call CMD_JIRA_ME to get own `accountId` and `displayName`
+- Otherwise: ask "Assign to (name or email):" → call CMD_JIRA_USER_SEARCH with that query
+
+If user search returns multiple results: show numbered list and ask which one.
+If user search returns zero results: "no users found matching '{query}'". Stop.
+
+Preview:
+```
+assigning ticket — {ticket_key}
+│ to: {DISPLAY_NAME}
+
+Confirm? [y/n]
+```
+
+Execute:
+```bash
+STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{"accountId":"{ACCOUNT_ID}"}' \
+  "{jira_url}/rest/api/3/issue/{ticket_key}/assignee")   # CMD_JIRA_ASSIGN
+```
+
+If not 204: print error and stop.
+
+Print: `  ✓ {ticket_key} assigned to {DISPLAY_NAME}`
+
+next: "next: run /zenith jira view {ticket_key} to confirm"
+
+---
+
+### INTENT_JIRA_BRANCH
+
+Parse Jira config (same block as INTENT_JIRA_CREATE). Build `$JIRA_AUTH`.
+
+Extract ticket key from request. If not found, ask: "Ticket key (e.g. AIE-123):"
+
+Fetch ticket summary:
+```bash
+BODY=$(curl -s \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/issue/{ticket_key}")   # CMD_JIRA_GET
+```
+
+Check for error.
+
+Parse `SUMMARY`. Slugify:
+```bash
+SLUG=$(echo "$SUMMARY" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//;s/-$//' | cut -c1-40)
+BRANCH_NAME="{ticket_key}-$SLUG"
+```
+
+Check current repo state: must be on `{base_branch}` or have a clean working tree. If on a feature branch with uncommitted changes, stop:
+```
+cannot create branch — uncommitted changes exist
+│ commit or stash your changes first, then run /zenith jira branch again
+```
+
+If on a feature branch (clean), ask: "Create {BRANCH_NAME} from {base_branch}? This will switch you to {base_branch} first. [y/n]"
+
+Preview:
+```
+creating branch — from {base_branch}
+│ branch: {BRANCH_NAME}
+│ ticket: {ticket_key} {SUMMARY}
+
+Create? [y/n]
+```
+
+Execute branch creation and push (same sequence as INTENT_START_NEW):
+```bash
+git fetch origin                            # CMD_FETCH_ORIGIN
+git checkout {base_branch}
+git pull --rebase origin {base_branch}      # CMD_PULL_REBASE
+git checkout -b {BRANCH_NAME}
+git push -u origin {BRANCH_NAME}            # CMD_PUSH_SET_UPSTREAM
+```
+
+Print:
+```
+  ✓ branch  {BRANCH_NAME}
+  ✓ pushed  origin/{BRANCH_NAME}
+```
+
+Jira's GitHub integration will auto-link this branch to {ticket_key} (branch name contains the ticket key pattern).
+
+next: "next: start coding — your branch is ready at {BRANCH_NAME}"
+
+---
+
+### INTENT_JIRA_CLOSE
+
+Parse Jira config (same block as INTENT_JIRA_CREATE). Build `$JIRA_AUTH`.
+
+Extract ticket key from request. If not found, ask: "Ticket key (e.g. AIE-123):"
+
+Fetch current state:
+```bash
+BODY=$(curl -s \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/issue/{ticket_key}")   # CMD_JIRA_GET
+```
+
+Parse `SUMMARY` and `CURRENT_STATUS`.
+
+If already Done (or equivalent closed status):
+```
+already closed — {ticket_key}
+│ current status: {CURRENT_STATUS}
+```
+Stop.
+
+Fetch transitions:
+```bash
+TRANSITIONS=$(curl -s \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/issue/{ticket_key}/transitions")   # CMD_JIRA_TRANSITIONS
+```
+
+Find transition with name matching "Done" (case-insensitive). If not found: "cannot close — no 'Done' transition available for {ticket_key} in its current state". Stop.
+
+Preview:
+```
+closing ticket — {ticket_key}
+│ {SUMMARY}
+│ {CURRENT_STATUS} → Done
+
+Close? [y/n]
+```
+
+Execute:
+```bash
+STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  -H "Content-Type: application/json" \
+  -d '{"transition":{"id":"{TRANSITION_ID}"}}' \
+  "{jira_url}/rest/api/3/issue/{ticket_key}/transitions")   # CMD_JIRA_TRANSITION
+```
+
+If not 204: print error and stop.
+
+Print: `  ✓ {ticket_key} closed`
+
+next: "next: run /zenith cleanup branches to remove the feature branch if you're done"
+
+---
+
+### INTENT_JIRA_DELETE
+
+Parse Jira config (same block as INTENT_JIRA_CREATE). Build `$JIRA_AUTH`.
+
+Extract ticket key from request. If not found, ask: "Ticket key (e.g. AIE-123):"
+
+Fetch ticket to show what will be deleted:
+```bash
+BODY=$(curl -s \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/issue/{ticket_key}")   # CMD_JIRA_GET
+```
+
+Check for error.
+
+Parse `SUMMARY` and `CURRENT_STATUS`.
+
+Warn and require explicit confirmation — do not use [y/n]:
+```
+deleting ticket — this cannot be undone
+│ {ticket_key}: {SUMMARY}
+│ status: {CURRENT_STATUS}
+│ this permanently removes the ticket from Jira
+
+  type the ticket key to confirm:
+```
+
+Read user input. If it does not match `{ticket_key}` exactly: "cancelled — ticket key did not match". Stop.
+
+Execute:
+```bash
+STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+  -H "Authorization: Basic $JIRA_AUTH" \
+  "{jira_url}/rest/api/3/issue/{ticket_key}")   # CMD_JIRA_DELETE
+```
+
+If not 204: print error and stop.
+
+Print: `  ✓ {ticket_key} deleted`
+
+next: "next: run /zenith jira list to see remaining tickets"
+
+---
+
 ## Step 5: After Every Operation
 
 Print one line showing what the user can do next, given the new repo state.
@@ -3371,6 +3867,7 @@ Examples:
 - references/push-ops.md - Push and PR commands
 - references/undo-ops.md - Undo and reset commands
 - references/safety.md - Non-negotiable safety rules
+- references/jira-ops.md - Jira ticket management: setup, config parsing, API patterns, error codes
 
 ## Error Handling
 

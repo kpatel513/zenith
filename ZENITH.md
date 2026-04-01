@@ -3500,11 +3500,13 @@ Build JQL:
 assignee = currentUser() AND project = {project} AND statusCategory != Done ORDER BY updated DESC
 ```
 
-URL-encode the JQL (replace spaces with `%20`, `=` with `%3D`, `!=` with `%21%3D`, `"` with `%22`). Execute:
+Execute:
 ```bash
-BODY=$(curl -s \
+BODY=$(curl -s -X POST \
   -H "Authorization: Basic $JIRA_AUTH" \
-  "{jira_url}/rest/api/3/search?jql={encoded_jql}&fields=summary,status,assignee,issuetype&maxResults=20")   # CMD_JIRA_SEARCH
+  -H "Content-Type: application/json" \
+  -d "{\"jql\":\"{jql}\",\"fields\":[\"summary\",\"status\",\"assignee\",\"issuetype\"],\"maxResults\":20}" \
+  "{jira_url}/rest/api/3/search/jql")   # CMD_JIRA_SEARCH
 ```
 
 Check for error.

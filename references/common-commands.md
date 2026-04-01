@@ -644,12 +644,15 @@ curl -s -o /dev/null -w "%{http_code}" -X PUT \
 
 ### CMD_JIRA_SEARCH
 ```bash
-curl -s \
+curl -s -X POST \
   -H "Authorization: Basic $JIRA_AUTH" \
-  "{jira_url}/rest/api/3/search?jql={jql}&fields=summary,status,assignee,issuetype&maxResults=20"
+  -H "Content-Type: application/json" \
+  -d '{"jql":"{jql}","fields":["summary","status","assignee","issuetype"],"maxResults":20}' \
+  "{jira_url}/rest/api/3/search/jql"
 ```
 **Purpose:** Search issues using JQL
 **Output:** JSON with `issues` array
+**Note:** Uses POST /rest/api/3/search/jql — the old GET /rest/api/3/search endpoint is deprecated as of 2024
 **Used for:** INTENT_JIRA_LIST
 
 ### CMD_JIRA_ME

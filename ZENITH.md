@@ -3385,13 +3385,23 @@ Build auth header:
 JIRA_AUTH=$(printf '%s:%s' "$jira_email" "$JIRA_API_TOKEN" | base64 | tr -d '\n')
 ```
 
-Determine issue type from the user's request:
+Fetch valid issue types for this project:
+```bash
+PROJECT_META=$(curl -s -H "Authorization: Basic $JIRA_AUTH" "{jira_url}/rest/api/3/project/{jira_project}")
+VALID_TYPES=$(echo "$PROJECT_META" | grep -o '"name":"[^"]*"' | cut -d'"' -f4 | grep -v "^$")
+```
+
+Determine issue type from the user's request, but only if it appears in `VALID_TYPES` (case-insensitive):
 - "epic" → Epic
 - "bug" or "defect" → Bug
 - "task" → Task
-- anything else (default) → Story
+- "story" → Story
+- anything else, or no type specified → use the first non-Epic type in `VALID_TYPES` as the default
 
-If type is ambiguous, ask: "Issue type — Story, Task, Bug, or Epic:"
+If the inferred type is not in `VALID_TYPES`, or type is ambiguous: print the valid types and ask:
+```
+  issue type ({valid_types_comma_separated}):
+```
 
 Ask for required fields:
 ```

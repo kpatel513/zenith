@@ -60,7 +60,7 @@ if [ -f "$ZENITH_DIR/.setup-complete" ]; then
         fi
     fi
     echo "Zenith already installed at $ZENITH_DIR"
-    echo "To update, run: cd $ZENITH_DIR && git pull"
+    echo "To update, run: cd $ZENITH_DIR && git fetch origin main --quiet && git reset --hard origin/main --quiet"
     exit 0
 fi
 

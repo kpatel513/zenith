@@ -13,11 +13,20 @@ The canonical skill definition lives in `ZENITH.md` at the repo root. `adapters/
 ## File Structure and Roles
 
 ```
-ZENITH.md                              — Canonical skill definition. The file all runtimes execute.
+ZENITH.md                              — Canonical skill definition. Step 4 is a routing table to intents/*.md.
 adapters/claude-command.md            — Claude Code adapter. Symlinked to ~/.claude/commands/zenith.md by setup.sh.
 adapters/codex-skill/SKILL.md         — Codex CLI adapter. Symlinked to ~/.codex/skills/zenith/ by setup.sh.
 adapters/gemini-command.toml          — Gemini CLI adapter. Symlinked to ~/.gemini/commands/zenith.toml by setup.sh.
 .cursor/rules/zenith.mdc              — Cursor adapter. Thin wrapper that reads ZENITH.md.
+intents/git-branch.md                 — Branch intent handlers (START_NEW, PICKUP_BRANCH, CONTINUE, CLEANUP_BRANCHES, WORKTREE_*)
+intents/git-commit.md                 — Commit intent handlers (SHOW_CHANGES, CHECK_SCOPE, SHOW_STAGED, SAVE, AMEND_*, SPLIT)
+intents/git-sync.md                   — Sync intent handlers (SYNC, HOW_FAR_BEHIND, TEAMMATES)
+intents/git-push.md                   — Push intent handlers (PUSH, FIX_PUSH, UPDATE_PR, DRAFT_PR, MERGE_COMPLETE)
+intents/git-undo.md                   — Undo intent handlers (UNDO_COMMIT, DISCARD, UNSTAGE, UNSTASH)
+intents/git-review.md                 — Review intent handlers (REVIEW_PR, RUN_CHECKS, GITIGNORE_CHECK, CHERRY_PICK, FIND_DUPLICATES, BLAST_RADIUS, CONFLICT_RADAR)
+intents/git-advanced.md               — Advanced intent handlers (STATUS, FIX_CI, CLEAN_HISTORY, MOVE_COMMITS, FIX_CONFLICT, STACK_STATUS)
+intents/jira.md                       — Jira intent handlers (JIRA_CREATE through JIRA_DELETE)
+intents/meta.md                       — Meta intent handlers (ZENITH_UPDATE)
 references/safety.md                  — Non-negotiable safety rules.
 references/contamination.md           — Cross-folder contamination detection logic.
 references/conflict-resolver.md       — Three-tier conflict resolution rules.
@@ -34,6 +43,7 @@ assets/.agent-config.template         — Template for per-user config.
 REQUIREMENTS.md                       — Functional and non-functional requirements.
 tests/lint.sh                         — Automated convention checks. Run before every PR.
 tests/test-setup.sh                   — Automated setup.sh behavior tests.
+tests/test-intents.sh                 — Structural tests for intents/ directory.
 tests/manual-checklist.md             — Situational tests requiring a real repo.
 ```
 
@@ -91,6 +101,7 @@ If an edit was wrong and had to be fixed:
 - `INTENT_PUSH` execution order must be: stage → commit → rebase → push. Rebasing with staged changes fails
 - Markdown links inside code fences are not clickable. PR URLs must use `open "url"` to open a browser
 - `INTENT_HELP` and `INTENT_UNKNOWN` have no `### HANDLER` sections in Step 4 — they are handled inline in Step 3. Exclude them from any lint check that looks for Step 4 handler sections
+- After the ZENITH.md split (v2.0.0), `### INTENT_*` handlers live in `intents/*.md` files, not in ZENITH.md. Step 4 in ZENITH.md is now a routing table. Lint checks both ZENITH.md and all intent files for handler sections and CMD_* references
 
 ---
 
@@ -103,16 +114,21 @@ bash tests/lint.sh
 # Run before and after any change to scripts/setup.sh
 bash tests/test-setup.sh
 
+# Run before and after any change to intent files
+bash tests/test-intents.sh
+
 # Manual — requires a real repo with Zenith installed
 # See tests/manual-checklist.md for all S1-S9 scenarios and safety rules
 ```
 
 `lint.sh` checks:
-- Every `CMD_*` reference in `ZENITH.md` is defined in `common-commands.md`
-- Every `INTENT_*` (except INTENT_HELP and INTENT_UNKNOWN) has a `### HANDLER` section
+- Every `CMD_*` reference in `ZENITH.md` and intent files is defined in `common-commands.md`
+- Every `INTENT_*` (except INTENT_HELP and INTENT_UNKNOWN) has a `### HANDLER` section in ZENITH.md or an intent file
 - Every `references/*.md` reference exists on disk
 - No deprecated placeholder names (`{branch_name}`, `{selected_branch}`, `{commit}`)
 - Every `references/` file that uses `CMD_*` references `common-commands.md`
+- Every `### INTENT_*` handler in intent files ends with a `next:` line
+- All intent files referenced in the ZENITH.md routing table exist
 
 ---
 

@@ -81,12 +81,14 @@ echo
 
 # Auto-detect GitHub username from gh CLI; ask only if that fails.
 # ZENITH_GITHUB_USERNAME overrides detection (used by tests and scripted installs).
+# GH_BIN overrides the gh binary path (used by tests to simulate gh not installed).
+_GH="${GH_BIN:-gh}"
 if [ -n "${ZENITH_GITHUB_USERNAME:-}" ]; then
     GITHUB_USERNAME="$ZENITH_GITHUB_USERNAME"
 else
     GITHUB_USERNAME=""
-    if command -v gh &>/dev/null; then
-        GITHUB_USERNAME=$(gh api user --jq '.login' 2>/dev/null) || true
+    if command -v "$_GH" &>/dev/null; then
+        GITHUB_USERNAME=$("$_GH" api user --jq '.login' 2>/dev/null) || true
     else
         echo "⚠ gh CLI not found — install it for PR and CI features: https://cli.github.com"
     fi

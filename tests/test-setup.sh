@@ -355,8 +355,9 @@ test_gh_not_installed() {
     zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
 
     local output exit_code
-    # Restrict PATH to system dirs where gh is never installed
-    output=$(PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+    # GH_BIN points to a nonexistent path — simulates gh not installed portably
+    # (PATH restriction fails on CI where gh lives in /usr/bin)
+    output=$(GH_BIN="/nonexistent/gh" \
         ZENITH_DIR="$zenith_dir" ZENITH_REPO="$source_repo" \
         CURSOR_HOME="/nonexistent/cursor" \
         CODEX_HOME="/nonexistent/codex" \

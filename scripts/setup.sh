@@ -84,7 +84,12 @@ echo
 if [ -n "${ZENITH_GITHUB_USERNAME:-}" ]; then
     GITHUB_USERNAME="$ZENITH_GITHUB_USERNAME"
 else
-    GITHUB_USERNAME=$(gh api user --jq '.login' 2>/dev/null)
+    GITHUB_USERNAME=""
+    if command -v gh &>/dev/null; then
+        GITHUB_USERNAME=$(gh api user --jq '.login' 2>/dev/null) || true
+    else
+        echo "⚠ gh CLI not found — install it for PR and CI features: https://cli.github.com"
+    fi
     if [ -z "$GITHUB_USERNAME" ]; then
         read -rp "GitHub username: " GITHUB_USERNAME <"$TTY"
     fi

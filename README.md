@@ -98,7 +98,7 @@ curl -fsSL https://raw.githubusercontent.com/kpatel513/zenith/main/scripts/setup
 ```
 
 That's it. The installer:
-- Detects your GitHub username from `gh` (asks only if `gh` isn't authenticated)
+- Detects your GitHub username from `gh` (asks if `gh` isn't installed or not authenticated)
 - Installs adapters for any tools it finds — Cursor, Codex CLI, Gemini CLI — automatically
 - Sets up a daily background update so you always have the latest version
 

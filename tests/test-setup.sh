@@ -343,6 +343,43 @@ test_cron_uses_fetch_reset() {
 }
 
 # ---------------------------------------------------------------------------
+# Test: gh CLI not installed — warns and falls through to username prompt
+# ---------------------------------------------------------------------------
+
+test_gh_not_installed() {
+    echo
+    echo "test: gh not installed — warns and prompts for username"
+
+    local source_repo zenith_dir
+    source_repo=$(make_source_repo)
+    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
+
+    local output exit_code
+    # GH_BIN points to a nonexistent path — simulates gh not installed portably
+    # (PATH restriction fails on CI where gh lives in /usr/bin)
+    output=$(GH_BIN="/nonexistent/gh" \
+        ZENITH_DIR="$zenith_dir" ZENITH_REPO="$source_repo" \
+        CURSOR_HOME="/nonexistent/cursor" \
+        CODEX_HOME="/nonexistent/codex" \
+        GEMINI_HOME="/nonexistent/gemini" \
+        GLOBAL_COMMANDS_DIR="$zenith_dir/global-commands" \
+        GLOBAL_CURSOR_RULES_DIR="$zenith_dir/cursor-rules" \
+        GLOBAL_CODEX_SKILLS_DIR="$zenith_dir/codex-skills" \
+        GLOBAL_GEMINI_COMMANDS_DIR="$zenith_dir/gemini-commands" \
+        TTY=/dev/stdin bash "$REPO_ROOT/scripts/setup.sh" <<< "testuser" 2>&1) || true
+    exit_code=$?
+
+    assert_exit_zero "$exit_code"                             "exits 0 when gh not installed"
+    assert_file      "$zenith_dir/.setup-complete"            "setup completes when gh not installed"
+    assert_contains  "testuser" "$zenith_dir/.global-config"  "username from prompt stored in .global-config"
+    echo "$output" | grep -q "gh" \
+        && pass "output warns about missing gh CLI" \
+        || fail "output warns about missing gh CLI"
+
+    rm -rf "$source_repo" "$zenith_dir"
+}
+
+# ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
 
@@ -360,6 +397,7 @@ test_codex_install
 test_gemini_install
 test_symlink_repair
 test_cron_uses_fetch_reset
+test_gh_not_installed
 
 echo
 echo "results: $PASS passed, $FAIL failed"

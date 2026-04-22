@@ -232,6 +232,29 @@ test_cursor_install() {
     rm -rf "$source_repo" "$zenith_dir"
 }
 
+test_codex_symlink_repair() {
+    echo
+    echo "test: codex symlink repaired when stale target exists"
+
+    local source_repo zenith_dir fake_home fake_codex stale_target actual_target
+    source_repo=$(make_source_repo)
+    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
+    fake_home=$(mktemp -d)
+    fake_codex="$fake_home/.codex"
+    mkdir -p "$fake_codex"
+    mkdir -p "$zenith_dir/codex-skills"
+    printf "stale-codex" > "$zenith_dir/codex-skills/zenith"
+
+    HOME="$fake_home" run_setup "$zenith_dir" "$source_repo" "myuser" "" "$fake_codex"
+    assert_symlink "$zenith_dir/codex-skills/zenith" "codex skill symlink repaired when stale target exists"
+    actual_target=$(readlink "$zenith_dir/codex-skills/zenith" 2>/dev/null || echo "")
+    echo "$actual_target" | grep -q "adapters/codex-skill" \
+        && pass "codex symlink points to adapters/codex-skill" \
+        || fail "codex symlink points to adapters/codex-skill (got: $actual_target)"
+
+    rm -rf "$source_repo" "$zenith_dir" "$fake_home"
+}
+
 # ---------------------------------------------------------------------------
 # Test: broken symlink is repaired on re-run (migration for pre-adapters/ installs)
 # ---------------------------------------------------------------------------
@@ -323,6 +346,29 @@ test_gemini_install() {
     rm -rf "$source_repo" "$zenith_dir"
 }
 
+test_gemini_symlink_repair() {
+    echo
+    echo "test: gemini symlink repaired when stale target exists"
+
+    local source_repo zenith_dir fake_home fake_gemini stale_target actual_target
+    source_repo=$(make_source_repo)
+    zenith_dir=$(mktemp -d); rm -rf "$zenith_dir"
+    fake_home=$(mktemp -d)
+    fake_gemini="$fake_home/.gemini"
+    mkdir -p "$fake_gemini"
+    mkdir -p "$zenith_dir/gemini-commands"
+    printf "stale-gemini" > "$zenith_dir/gemini-commands/zenith.toml"
+
+    HOME="$fake_home" run_setup "$zenith_dir" "$source_repo" "myuser" "" "" "$fake_gemini"
+    assert_symlink "$zenith_dir/gemini-commands/zenith.toml" "gemini command symlink repaired when stale target exists"
+    actual_target=$(readlink "$zenith_dir/gemini-commands/zenith.toml" 2>/dev/null || echo "")
+    echo "$actual_target" | grep -q "adapters/gemini-command.toml" \
+        && pass "gemini symlink points to adapters/gemini-command.toml" \
+        || fail "gemini symlink points to adapters/gemini-command.toml (got: $actual_target)"
+
+    rm -rf "$source_repo" "$zenith_dir" "$fake_home"
+}
+
 # ---------------------------------------------------------------------------
 # Test: cron command uses fetch+reset, not git pull (robust against untracked files)
 # ---------------------------------------------------------------------------
@@ -394,7 +440,9 @@ test_no_repo_files_written
 test_symlink_target
 test_cursor_install
 test_codex_install
+test_codex_symlink_repair
 test_gemini_install
+test_gemini_symlink_repair
 test_symlink_repair
 test_cron_uses_fetch_reset
 test_gh_not_installed

@@ -39,6 +39,16 @@ if [ -f "$ZENITH_DIR/.setup-complete" ]; then
         (crontab -l 2>/dev/null | grep -v "zenith"; echo "$UPDATED_CRON") | crontab - 2>/dev/null && \
             echo "✓ Migrated cron job to robust update command" || true
     fi
+    # Auto-install Cursor rule if Cursor is installed but Zenith rule is missing or stale
+    if [ -d "$HOME/.cursor" ]; then
+        CURSOR_RULE_TARGET="$GLOBAL_CURSOR_RULES_DIR/zenith.mdc"
+        CURSOR_RULE_SOURCE="$ZENITH_DIR/.cursor/rules/zenith.mdc"
+        if [ ! -L "$CURSOR_RULE_TARGET" ] || [ "$(readlink "$CURSOR_RULE_TARGET" 2>/dev/null)" != "$CURSOR_RULE_SOURCE" ]; then
+            mkdir -p "$GLOBAL_CURSOR_RULES_DIR"
+            ln -sf "$CURSOR_RULE_SOURCE" "$CURSOR_RULE_TARGET"
+            echo "✓ Repaired cursor rule ($CURSOR_RULE_TARGET)"
+        fi
+    fi
     # Auto-install Codex skill if Codex is installed but Zenith skill is missing or stale
     if [ -d "$HOME/.codex" ]; then
         CODEX_SKILL_TARGET="$GLOBAL_CODEX_SKILLS_DIR/zenith"
@@ -118,9 +128,9 @@ ln -s "$ZENITH_DIR/adapters/claude-command.md" "$GLOBAL_SYMLINK"
 if [[ "${INSTALL_CURSOR:-n}" =~ ^[Yy]$ ]]; then
     CURSOR_RULE_TARGET="$GLOBAL_CURSOR_RULES_DIR/zenith.mdc"
     CURSOR_RULE_SOURCE="$ZENITH_DIR/.cursor/rules/zenith.mdc"
-    mkdir -p "$GLOBAL_CURSOR_RULES_DIR"
-    if [ ! -L "$CURSOR_RULE_TARGET" ] && [ ! -f "$CURSOR_RULE_TARGET" ]; then
-        ln -s "$CURSOR_RULE_SOURCE" "$CURSOR_RULE_TARGET"
+    if [ ! -L "$CURSOR_RULE_TARGET" ] || [ "$(readlink "$CURSOR_RULE_TARGET" 2>/dev/null)" != "$CURSOR_RULE_SOURCE" ]; then
+        mkdir -p "$GLOBAL_CURSOR_RULES_DIR"
+        ln -sf "$CURSOR_RULE_SOURCE" "$CURSOR_RULE_TARGET"
     fi
 fi
 
@@ -129,8 +139,8 @@ if [[ "${INSTALL_CODEX:-n}" =~ ^[Yy]$ ]]; then
     CODEX_SKILL_TARGET="$GLOBAL_CODEX_SKILLS_DIR/zenith"
     CODEX_SKILL_SOURCE="$ZENITH_DIR/adapters/codex-skill"
     mkdir -p "$GLOBAL_CODEX_SKILLS_DIR"
-    if [ ! -L "$CODEX_SKILL_TARGET" ] && [ ! -e "$CODEX_SKILL_TARGET" ]; then
-        ln -s "$CODEX_SKILL_SOURCE" "$CODEX_SKILL_TARGET"
+    if [ ! -L "$CODEX_SKILL_TARGET" ] || [ "$(readlink "$CODEX_SKILL_TARGET" 2>/dev/null)" != "$CODEX_SKILL_SOURCE" ]; then
+        ln -sf "$CODEX_SKILL_SOURCE" "$CODEX_SKILL_TARGET"
     fi
 fi
 
@@ -139,8 +149,8 @@ if [[ "${INSTALL_GEMINI:-n}" =~ ^[Yy]$ ]]; then
     GEMINI_CMD_TARGET="$GLOBAL_GEMINI_COMMANDS_DIR/zenith.toml"
     GEMINI_CMD_SOURCE="$ZENITH_DIR/adapters/gemini-command.toml"
     mkdir -p "$GLOBAL_GEMINI_COMMANDS_DIR"
-    if [ ! -L "$GEMINI_CMD_TARGET" ] && [ ! -f "$GEMINI_CMD_TARGET" ]; then
-        ln -s "$GEMINI_CMD_SOURCE" "$GEMINI_CMD_TARGET"
+    if [ ! -L "$GEMINI_CMD_TARGET" ] || [ "$(readlink "$GEMINI_CMD_TARGET" 2>/dev/null)" != "$GEMINI_CMD_SOURCE" ]; then
+        ln -sf "$GEMINI_CMD_SOURCE" "$GEMINI_CMD_TARGET"
     fi
 fi
 

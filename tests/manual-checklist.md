@@ -417,6 +417,39 @@ Same phrase in different situations should produce different behavior.
 
 ---
 
+## Linear issue workflows
+
+Use an isolated test workspace for mutations. Set `LINEAR_API_KEY` in the agent environment and use real team/project IDs from that workspace. These examples use Codex's `$zenith` invocation.
+
+| Scenario | Expected |
+|----------|----------|
+| `$zenith linear list` with the key unset | Explains the environment-key requirement; sends no API request and never requests a key in chat |
+| `$zenith linear view ENG-123` while local main is behind or a merge is in progress | Reads the issue without fetching, syncing, switching branches, or recovering the merge |
+| `$zenith view ticket ENG-123` without naming Linear | Retains the existing Jira route |
+| `$zenith create a branch kp/linear-support` | Uses the Git branch workflow and its diagnostics; a branch name does not select Linear issue management |
+| `$zenith view https://linear.app/example/issue/ENG-123/example` | Routes to Linear and sends the identifier to the fixed API endpoint |
+| Create with no configured team and multiple accessible teams | Asks for a team; does not create an issue or write config before selection |
+| Create with a title containing quotes, newlines, backticks, and `$()` | Preserves literal content in JSON variables; executes no embedded shell content |
+| List for a configured project that is missing from the selected team | Reports the scope error; does not silently list all projects |
+| Override the configured team while a default project is set | Omits the old team's default project unless explicitly requested |
+| List with more than 20 matches | Shows 20 and indicates more results; an explicit request for all follows cursors |
+| A matching project or member exists on page two | Resolves it before deciding absence or uniqueness; a later-page error leaves the lookup incomplete |
+| Update the title of an issue from a team other than the configured default | Uses the issue's team and changes only its title |
+| Clear the project explicitly; then update another field without mentioning project | First sends `projectId: null`; second omits `projectId` |
+| Transition with two matching started states or close with two completed states | Asks which state to use; never chooses the first result |
+| Assign to me, assign to an ambiguous name, or unassign | Resolves the viewer, disambiguates workspace users, or sends explicit `assigneeId: null` |
+| Assign a public-team issue to a workspace member outside that team | Allows the assignment; relies on Linear's API for access checks |
+| HTTP 200 with GraphQL errors, `success: false`, missing data, or malformed JSON | Reports failure, makes no dependent mutation, and never claims success |
+| A create times out after sending its payload | Reports an unknown result; reconciles through a read before offering a retry |
+| HTTP 429 or a `RATELIMITED` GraphQL error | Reports retry information and stops without automatically repeating a mutation |
+| Branch with staged, unstaged, or untracked changes, detached HEAD, or a merge/rebase in progress | Stops before switching or pushing; preserves the working tree |
+| Branch name already exists locally, remotely, or in a worktree | Reports the existing branch; never resets or overwrites it |
+| Branch on a clean repo, then simulate push failure | Creates from fast-forwarded base; reports local success and remote failure; preserves the local branch |
+| Delete and enter `y` instead of the issue identifier | Sends no mutation |
+| Delete and enter the exact identifier | Sends `issueDelete` with `permanentlyDelete: false`; reports success only after checking the payload |
+
+---
+
 ## Output Format
 
 Verify that output format matches the spec in `zenith.md`:

@@ -1,5 +1,5 @@
 ---
-description: AI Agent that automates Git workflows, type in english and let agent help you with git repo operations
+description: Automate Git workflows and manage Jira and Linear issues using natural language.
 ---
 
 You are Zenith. Read the full skill definition and follow all instructions exactly.

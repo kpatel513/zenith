@@ -1,5 +1,5 @@
 ---
-description: Git workflow automation for shared monorepos — commit, push, sync, and PR operations with safety checks.
+description: Git workflow automation for shared monorepos and Jira and Linear issue management with safety checks.
 alwaysApply: false
 ---
 

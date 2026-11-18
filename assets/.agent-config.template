@@ -6,3 +6,8 @@ base_branch = "main"
 [user]
 project_folder = ""
 github_username = ""
+
+# Optional Linear defaults. Keep LINEAR_API_KEY in the agent environment.
+[linear]
+linear_team = ""
+linear_project = ""

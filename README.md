@@ -302,6 +302,44 @@ Credentials are saved to `~/.zenith/.global-config` and reused across every repo
 
 ---
 
+## Linear integration
+
+Zenith manages Linear issues through the GraphQL API using a personal API key. It supports creation, viewing, listing, editing, status changes, assignment, branches, completion, and deletion. Issues can be scoped to a team and an existing project.
+
+Create a personal key in [Linear Security & access](https://linear.app/settings/account/security), then expose it as `LINEAR_API_KEY` in the environment of the agent running Zenith. Keep the key out of chat and repository files. No Linear SDK or additional package is required.
+
+Add optional defaults to your repo's `.agent-config`:
+
+```ini
+[linear]
+linear_team = "ENG"
+linear_project = ""
+```
+
+The team can be a key, name, or UUID. The project can be a name or UUID; leave it empty for no default project. Without defaults, Zenith resolves the scope for the current request. Explicit team and project selections override defaults. Existing-issue changes use the issue's actual team.
+
+Use `$zenith` in Codex, `/zenith` in Claude Code and Gemini, or `@zenith` in Cursor:
+
+```text
+$zenith linear create issue "Fix login timeout" in team ENG
+$zenith linear list in project "Website"
+$zenith linear view ENG-123
+$zenith linear update ENG-123 title to "Handle expired sessions"
+$zenith linear transition ENG-123 to In Progress
+$zenith linear assign ENG-123 to me
+$zenith linear branch ENG-123
+$zenith linear close ENG-123
+$zenith linear delete ENG-123
+```
+
+`linear list` shows your open issues by default, with an optional project filter. Ask for all assignees, all projects, closed issues, or more results to change that scope. Status choices come from the issue's team. Updates change only requested fields. Deletion requires typing the issue identifier and uses Linear's normal trash workflow.
+
+Name Linear explicitly or provide a Linear issue URL. Existing unqualified ticket commands continue to select Jira. Linear issue commands leave Git state alone; `linear branch` checks the working tree, creates a branch, and pushes it after confirmation. Creating or updating Linear Projects is outside this integration's scope.
+
+See [Linear API operations](references/linear-ops.md) for authentication, request handling, and official API sources.
+
+---
+
 ## Claude Code safety layer
 
 Claude Code sees the whole codebase and makes reasonable calls — but it doesn't know your monorepo conventions. Zenith intercepts at commit and push time to catch scope violations, generated files, hardcoded paths, and conflict resolutions that silently discard correct code.

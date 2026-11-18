@@ -45,7 +45,7 @@ not a git repo — Zenith requires a git repository
 │ open Claude Code from inside a repo and try again
 ```
 
-**Linear routing:** After the minimal probe and repo-presence check, Linear issue-management requests, including branching for a Linear issue, go directly to Step 3. Select Linear only when the request names it as the issue provider or supplies a `linear.app` issue URL. A branch name or quoted content containing "Linear" does not select this route. Read existing `.agent-config` values if present, but skip first-time repo setup, parent detection, Phase 2, auto-sync, and Step 2 recovery for these requests. Linear issue operations must not change Git state. `INTENT_LINEAR_BRANCH` performs its own config and Git safety checks before creating a branch. This exception does not apply to other requests.
+**Linear routing:** After the minimal probe and repo-presence check, apply the provider rules in Step 3 to issue-management requests, including branching for an issue. Linear is the default when no provider is specified. Requests selecting Linear go directly to Step 3. Names appearing only in branch names, PR titles, code, or quoted content do not turn Git requests into issue-management requests. Read existing `.agent-config` values if present, but skip first-time repo setup, parent detection, Phase 2, auto-sync, and Step 2 recovery for Linear requests. Linear issue operations must not change Git state. `INTENT_LINEAR_BRANCH` performs its own config and Git safety checks before creating a branch. This exception does not apply to other requests.
 
 Parse `.agent-config` for:
 - `github_org` - GitHub organization
@@ -435,7 +435,7 @@ Stop. Do not proceed to intent classification.
 
 Map user's request to ONE intent. Use both request text AND situation to classify.
 
-For issue management, explicit provider names take precedence over generic Jira trigger phrases. A Linear issue URL also selects Linear. Names appearing only in branch names, PR titles, code, or quoted issue content do not select a provider. A bare identifier such as `ENG-123` does not identify a provider. Requests without an explicit provider retain the existing Jira routing. If a request names both providers without a clear target, ask which service to use. Do not add cross-service synchronization or fall back to Jira after a Linear failure.
+For issue management, select the provider before matching the action. Linear is the default for unqualified ticket or issue requests, including requests with a bare identifier such as `ENG-123`. An explicit Jira request selects Jira; an explicit Linear request or `linear.app` issue URL selects Linear. Names appearing only in branch names, PR titles, code, or quoted issue content do not select a provider. Configured Jira credentials or project defaults do not override the Linear default. If a request names both providers without a clear target, ask which service to use. Do not add cross-service synchronization or fall back to Jira when Linear credentials are missing or a Linear request fails.
 
 **Intents**:
 - `INTENT_START_NEW` - start new work, new feature, new branch
@@ -478,24 +478,24 @@ For issue management, explicit provider names take precedence over generic Jira 
 - `INTENT_WORKTREE_ADD` - open branch in new worktree, second checkout, work on two branches at once, review PR without losing changes
 - `INTENT_WORKTREE_LIST` - list worktrees, show worktrees, how many worktrees do I have
 - `INTENT_WORKTREE_REMOVE` - remove worktree, done with worktree, clean up worktree, delete worktree
-- `INTENT_JIRA_CREATE` - create jira ticket, new ticket, new story, new task, new bug, new epic, create issue
-- `INTENT_JIRA_VIEW` - show ticket, view ticket, what's AIE-123, open ticket, ticket details, look up ticket
-- `INTENT_JIRA_LIST` - list tickets, my tickets, show board, jira backlog, assigned to me, open tickets
-- `INTENT_JIRA_UPDATE` - update ticket, change ticket summary, edit ticket description, rename ticket
-- `INTENT_JIRA_TRANSITION` - move ticket to in progress, mark done, move to review, start ticket, change ticket status
-- `INTENT_JIRA_ASSIGN` - assign ticket, assign to me, assign AIE-123 to someone, take ticket
-- `INTENT_JIRA_BRANCH` - create branch for ticket, start work on AIE-123, branch from ticket, checkout ticket
-- `INTENT_JIRA_CLOSE` - close ticket, mark ticket done, resolve ticket, complete ticket
-- `INTENT_JIRA_DELETE` - delete ticket, remove ticket, delete issue
-- `INTENT_LINEAR_CREATE` - create a Linear issue or ticket
-- `INTENT_LINEAR_VIEW` - view a Linear issue or Linear issue URL
-- `INTENT_LINEAR_LIST` - my Linear issues, list Linear issues, Linear issues in a project
-- `INTENT_LINEAR_UPDATE` - edit a Linear issue title, description, priority, or project
-- `INTENT_LINEAR_TRANSITION` - change a Linear issue status, move a Linear issue to in progress
-- `INTENT_LINEAR_ASSIGN` - assign a Linear issue, assign to me in Linear, unassign a Linear issue
-- `INTENT_LINEAR_BRANCH` - create a branch for a Linear issue, Linear branch
-- `INTENT_LINEAR_CLOSE` - close, complete, or mark a Linear issue done
-- `INTENT_LINEAR_DELETE` - delete a Linear issue
+- `INTENT_JIRA_CREATE` - create a Jira ticket, new Jira story, new Jira task, new Jira bug, new Jira epic
+- `INTENT_JIRA_VIEW` - show a Jira ticket, Jira view AIE-123, Jira ticket details
+- `INTENT_JIRA_LIST` - my Jira tickets, list Jira tickets, Jira board, Jira backlog
+- `INTENT_JIRA_UPDATE` - update a Jira ticket, edit a Jira ticket description, rename a Jira ticket
+- `INTENT_JIRA_TRANSITION` - move a Jira ticket to in progress, change a Jira ticket status
+- `INTENT_JIRA_ASSIGN` - assign a Jira ticket, Jira assign AIE-123 to me
+- `INTENT_JIRA_BRANCH` - create a branch for a Jira ticket, Jira branch AIE-123
+- `INTENT_JIRA_CLOSE` - close, resolve, complete, or mark a Jira ticket done
+- `INTENT_JIRA_DELETE` - delete a Jira ticket, remove a Jira issue
+- `INTENT_LINEAR_CREATE` - create a ticket, create issue, new ticket, new story, new task, new bug, new epic, create a Linear issue or ticket
+- `INTENT_LINEAR_VIEW` - show ticket, view ticket, what's ENG-123, open ticket, ticket details, look up ticket, view a Linear issue or Linear issue URL
+- `INTENT_LINEAR_LIST` - list tickets, my tickets, show board, assigned to me, open tickets, my Linear issues, Linear issues in a project
+- `INTENT_LINEAR_UPDATE` - update ticket, change ticket summary, edit ticket description, rename ticket, edit a Linear issue title, priority, or project
+- `INTENT_LINEAR_TRANSITION` - move ticket to in progress, move to review, start ticket, change ticket status, change a Linear issue status
+- `INTENT_LINEAR_ASSIGN` - assign ticket, assign to me, assign ENG-123 to someone, take ticket, assign or unassign a Linear issue
+- `INTENT_LINEAR_BRANCH` - create branch for ticket, start work on ENG-123, branch from ticket, checkout ticket, create a branch for a Linear issue
+- `INTENT_LINEAR_CLOSE` - close ticket, mark done, mark ticket done, resolve ticket, complete ticket, close a Linear issue
+- `INTENT_LINEAR_DELETE` - delete ticket, remove ticket, delete issue, delete a Linear issue
 - `INTENT_ZENITH_UPDATE` - update zenith, upgrade zenith, get latest zenith
 - `INTENT_HELP` - help, what can you do, what commands exist
 - `INTENT_UNKNOWN` - cannot determine intent
@@ -547,24 +547,24 @@ conflict radar            | Show open PRs that touch the same files as your curr
 open worktree             | Check out a branch in a new directory — switch contexts without stashing
 list worktrees            | Show all active worktrees and their paths
 remove worktree           | Delete a linked worktree directory
-create a ticket           | Create a Jira story, task, bug, or epic in your project
-show ticket AIE-123       | Display ticket details: summary, status, type, assignee
-my tickets                | List open Jira tickets assigned to you
-update ticket summary     | Edit the summary or description of a ticket
-move ticket to in progress| Transition a ticket to a new status
-assign ticket to me       | Assign a Jira ticket to yourself or a teammate
-branch from ticket        | Create a git branch named after a Jira ticket
-close ticket              | Transition a ticket to Done
-delete ticket             | Permanently delete a Jira ticket (requires confirmation)
-linear create issue       | Create an issue in a Linear team and optional project
-linear view ENG-123        | Show a Linear issue and its URL
-linear list               | List your open Linear issues, optionally filtered by project
-linear update ENG-123     | Edit specified Linear issue fields
-linear transition ENG-123 | Select a status from the issue's team
-linear assign ENG-123     | Assign or unassign a Linear issue
-linear branch ENG-123     | Create and push a branch for a Linear issue
-linear close ENG-123      | Move a Linear issue to a completed state
-linear delete ENG-123     | Delete a Linear issue after identifier confirmation
+create a ticket           | Create a Linear issue in a team and optional project
+show ticket ENG-123       | Display Linear issue details and its URL
+my tickets                | List your open Linear issues, optionally filtered by project
+update ticket summary     | Edit a Linear issue title or description
+move ticket to in progress| Select a status from the Linear issue's team
+assign ticket to me       | Assign a Linear issue to yourself or a teammate
+branch from ticket        | Create and push a branch for a Linear issue
+close ticket              | Move a Linear issue to a completed state
+delete ticket             | Delete a Linear issue after identifier confirmation
+jira create a ticket      | Create a Jira story, task, bug, or epic
+jira view AIE-123         | Display Jira ticket details
+jira list                 | List your open Jira tickets
+jira update AIE-123       | Edit a Jira ticket summary or description
+jira transition AIE-123   | Transition a Jira ticket to a new status
+jira assign AIE-123       | Assign a Jira ticket to yourself or a teammate
+jira branch AIE-123       | Create and push a branch for a Jira ticket
+jira close AIE-123        | Transition a Jira ticket to Done
+jira delete AIE-123       | Permanently delete a Jira ticket after key confirmation
 update zenith             | Pull latest Zenith version from GitHub
 help                      | Show this table
 ```

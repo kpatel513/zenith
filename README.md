@@ -259,15 +259,15 @@ Zenith tracks your workflow events and surfaces nudges when a mistake recurs —
 
 ## Jira integration
 
-Zenith can create, view, update, and close Jira tickets without leaving Claude Code.
+Zenith can create, view, update, and close Jira tickets without leaving Claude Code. Name Jira explicitly to select it; unqualified ticket requests use Linear.
 
 ```
-/zenith create a bug ticket for the login timeout issue
-/zenith show ticket AIE-234
-/zenith my tickets
-/zenith move AIE-234 to in progress
-/zenith branch from ticket AIE-234
-/zenith close ticket AIE-234
+/zenith jira create a bug ticket for the login timeout issue
+/zenith jira show ticket AIE-234
+/zenith jira my tickets
+/zenith jira move AIE-234 to in progress
+/zenith jira branch from ticket AIE-234
+/zenith jira close ticket AIE-234
 ```
 
 **Setup — runs once, automatically on first Jira command:**
@@ -286,25 +286,25 @@ jira repo setup — configure this repo's default project
   ✓ jira ready — https://your-org.atlassian.net, project AIE
 ```
 
-Credentials are saved to `~/.zenith/.global-config` and reused across every repo. The default project is saved per-repo in `.agent-config`. You can override it inline: `/zenith my INFRA tickets`.
+Credentials are saved to `~/.zenith/.global-config` and reused across every repo. The default project is saved per-repo in `.agent-config`. You can override it inline: `/zenith jira my INFRA tickets`.
 
 | Say this | What happens |
 |----------|-------------|
-| `create a ticket` | Create a story, task, bug, or epic — asks for type, summary, epic, description |
-| `show ticket AIE-123` | Display ticket details: status, type, assignee |
-| `my tickets` | List open tickets assigned to you in this repo's project |
-| `update ticket summary` | Edit the summary or description of a ticket |
-| `move ticket to in progress` | Transition a ticket to any status |
-| `assign ticket to me` | Assign a ticket to yourself or search for a teammate |
-| `branch from ticket AIE-123` | Create a git branch named after the ticket — Jira links it automatically |
-| `close ticket AIE-123` | Transition ticket to Done |
-| `delete ticket AIE-123` | Permanently delete a ticket (requires typing the ticket key to confirm) |
+| `jira create a ticket` | Create a story, task, bug, or epic; asks for type, summary, epic, description |
+| `jira show ticket AIE-123` | Display ticket details: status, type, assignee |
+| `jira my tickets` | List open tickets assigned to you in this repo's project |
+| `jira update ticket summary` | Edit the summary or description of a ticket |
+| `jira move ticket to in progress` | Transition a ticket to any status |
+| `jira assign ticket to me` | Assign a ticket to yourself or search for a teammate |
+| `jira branch from ticket AIE-123` | Create a git branch named after the ticket; Jira links it automatically |
+| `jira close ticket AIE-123` | Transition ticket to Done |
+| `jira delete ticket AIE-123` | Permanently delete a ticket (requires typing the ticket key to confirm) |
 
 ---
 
 ## Linear integration
 
-Zenith manages Linear issues through the GraphQL API using a personal API key. It supports creation, viewing, listing, editing, status changes, assignment, branches, completion, and deletion. Issues can be scoped to a team and an existing project.
+Linear is the default for ticket and issue requests. Zenith manages Linear issues through the GraphQL API using a personal API key. It supports creation, viewing, listing, editing, status changes, assignment, branches, completion, and deletion. Issues can be scoped to a team and an existing project.
 
 Create a personal key in [Linear Security & access](https://linear.app/settings/account/security), then expose it as `LINEAR_API_KEY` in the environment of the agent running Zenith. Keep the key out of chat and repository files. No Linear SDK or additional package is required.
 
@@ -321,6 +321,9 @@ The team can be a key, name, or UUID. The project can be a name or UUID; leave i
 Use `$zenith` in Codex, `/zenith` in Claude Code and Gemini, or `@zenith` in Cursor:
 
 ```text
+$zenith create a ticket "Fix login timeout" in team ENG
+$zenith my tickets
+$zenith show ticket ENG-123
 $zenith linear create issue "Fix login timeout" in team ENG
 $zenith linear list in project "Website"
 $zenith linear view ENG-123
@@ -334,7 +337,7 @@ $zenith linear delete ENG-123
 
 `linear list` shows your open issues by default, with an optional project filter. Ask for all assignees, all projects, closed issues, or more results to change that scope. Status choices come from the issue's team. Updates change only requested fields. Deletion requires typing the issue identifier and uses Linear's normal trash workflow.
 
-Name Linear explicitly or provide a Linear issue URL. Existing unqualified ticket commands continue to select Jira. Linear issue commands leave Git state alone; `linear branch` checks the working tree, creates a branch, and pushes it after confirmation. Creating or updating Linear Projects is outside this integration's scope.
+You can also name Linear explicitly or provide a Linear issue URL. To use Jira, name it explicitly, for example `$zenith jira create a ticket`. Jira credentials and project defaults do not change the provider selection. If `LINEAR_API_KEY` is missing or a Linear request fails, Zenith reports the problem without falling back to Jira. Linear issue commands leave Git state alone; `branch from ticket` and `linear branch` check the working tree, create a branch, and push it after confirmation. Creating or updating Linear Projects is outside this integration's scope.
 
 See [Linear API operations](references/linear-ops.md) for authentication, request handling, and official API sources.
 

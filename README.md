@@ -341,6 +341,22 @@ You can also name Linear explicitly or provide a Linear issue URL. To use Jira, 
 
 See [Linear API operations](references/linear-ops.md) for authentication, request handling, and official API sources.
 
+### Link Linear issues to PRs
+
+Ask Zenith to associate an issue when creating a ready PR, opening a draft, or updating an existing PR:
+
+```text
+$zenith open a PR for Linear ENG-123
+$zenith create a draft PR for ENG-123 and ENG-456
+$zenith link Linear ENG-123 to PR 42
+```
+
+Zenith includes every requested issue ID in the title, for example `feat(auth): handle expired sessions [ENG-123]`, and adds `implements ENG-123` to the description. `implements` is the default closing keyword: Linear follows the team's configured workflow and applies its merge status when the PR merges. The repository must have Linear's GitHub integration enabled.
+
+For partial work that must not close on merge, request `refs ENG-123` or `part of ENG-123`. For a relation without status changes, request `relates to ENG-123`. `skip ENG-123` or `ignore ENG-123` prevents automatic linking. A bare ID in the description or a magic word in a PR comment does not create the requested association. These behaviors follow [Linear's linking rules](https://linear.app/docs/github#link-through-pull-requests).
+
+Existing PR edits preserve the description and valid links, avoid duplicates, and do not require a code commit or a Linear API key when the identifier is supplied. Zenith reports the saved PR metadata separately from whether Linear synchronization has been verified. Creating a ticket alone does not create a PR.
+
 ---
 
 ## Claude Code safety layer

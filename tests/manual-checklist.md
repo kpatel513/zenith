@@ -456,6 +456,34 @@ Use an isolated test workspace for mutations. Set `LINEAR_API_KEY` in the agent 
 
 ---
 
+## Linear PR associations
+
+Use an isolated GitHub repository connected to a Linear test workspace. Only use real test issue IDs when publishing PR metadata. Record the saved PR title/body and the observed Linear association separately.
+
+| Scenario | Expected |
+|----------|----------|
+| `$zenith open a PR for Linear ENG-123` | Uses the Git PR workflow, includes `ENG-123` in the title and `implements ENG-123` in the body; does not create another issue |
+| `$zenith create a draft PR for ENG-123` | Creates one draft with the ID in its title and the same `implements` line in its description |
+| `$zenith link Linear ENG-123 to PR 42` on base, behind main, with staged/untracked changes, or during a merge | Updates only PR title/body; no fetch, sync, recovery, staging, commit, branch switch, or push; no commit-message prompt |
+| Link a supplied ID with `LINEAR_API_KEY` unset | Uses GitHub PR metadata; does not require a Linear API call or ask for a key |
+| Request a link without an issue ID or with several possible target PRs | Asks for the missing target before publishing; invents no issue and creates no PR |
+| Create a PR for `ENG-123` and `ENG-456` | Includes both IDs in the title and one `implements` line for each ID in the body |
+| Request partial work for `ENG-123` without closing on merge | Uses `refs ENG-123` or `part of ENG-123`, retains the title ID, and adds no closing line for that issue |
+| Request only a relation to `ENG-123` with no status changes | Uses a relation keyword with the title ID; adds no closing or non-closing progress keyword for that issue |
+| Explicitly request `fixes ENG-123` | Preserves the chosen closing keyword instead of replacing it with the default |
+| Existing body contains `refs ENG-123`; user asks to link it again | Preserves that relationship and other content, adds a missing title ID once, and adds no duplicate or closing line |
+| Repeat a link request when title and description are already correct | Performs no PR edit and does not duplicate the ID or magic-word line |
+| Existing description contains `ignore ENG-123` and the new request asks to link it | Resolves the conflicting instruction before editing; does not silently remove the suppression |
+| User explicitly excludes an issue from automatic linking | Uses skip/ignore for that ID; does not add it to the title or other link lines and does not claim an existing association was removed |
+| User removes an ID or changes the relationship while editing the PR preview | Clarifies the intended association before publishing; does not silently restore or drop it |
+| Title/body include quotes, newlines, backticks, or `$()` | Preserves literal content through quoted arguments and a temporary body file; executes no embedded content |
+| Push code and link an issue when an open PR already exists | Pushes safely, edits that PR once, and creates no duplicate PR |
+| PR edit fails after a successful code push | Reports the successful push and failed metadata edit separately |
+| PR text saves but Linear association is not observable | Reports the saved metadata and unverified synchronization; does not claim success in Linear or post a comment as a workaround |
+| Create an ordinary PR with no association requested | Adds no ticket requirement, inferred issue IDs, or magic-word lines |
+
+---
+
 ## Output Format
 
 Verify that output format matches the spec in `zenith.md`:

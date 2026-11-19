@@ -45,7 +45,7 @@ not a git repo — Zenith requires a git repository
 │ open Claude Code from inside a repo and try again
 ```
 
-**Linear routing:** After the minimal probe and repo-presence check, apply the provider rules in Step 3 to issue-management requests, including branching for an issue. Linear is the default when no provider is specified. Requests selecting Linear go directly to Step 3. Names appearing only in branch names, PR titles, code, or quoted content do not turn Git requests into issue-management requests. Read existing `.agent-config` values if present, but skip first-time repo setup, parent detection, Phase 2, auto-sync, and Step 2 recovery for Linear requests. Linear issue operations must not change Git state. `INTENT_LINEAR_BRANCH` performs its own config and Git safety checks before creating a branch. This exception does not apply to other requests.
+**Issue and PR link routing:** After the minimal probe and repo-presence check, apply the provider and PR rules in Step 3. Linear issue-management requests, including branching for an issue, go directly to Step 3. Requests that only link Linear issues to an existing PR also go directly to Step 3, using `INTENT_UPDATE_PR`. For these two routes, read existing `.agent-config` values if present, but skip first-time repo setup, parent detection, Phase 2, auto-sync, and Step 2 recovery. Neither route changes Git state, except `INTENT_LINEAR_BRANCH`, which performs its own config and Git safety checks. Creating a PR or pushing code with a Linear link uses the normal Git workflow. Names appearing only in branch names, PR titles, code, or quoted content do not turn Git requests into issue-management requests. This exception does not apply to other requests.
 
 Parse `.agent-config` for:
 - `github_org` - GitHub organization
@@ -435,6 +435,8 @@ Stop. Do not proceed to intent classification.
 
 Map user's request to ONE intent. Use both request text AND situation to classify.
 
+Requests to create, update, or link a GitHub PR use `INTENT_PUSH`, `INTENT_DRAFT_PR`, or `INTENT_UPDATE_PR`, even when they mention a Linear issue. Creating a PR for an issue is not issue creation. A request only to associate an issue with an existing PR uses `INTENT_UPDATE_PR` without staging, committing, syncing, or pushing code.
+
 For issue management, select the provider before matching the action. Linear is the default for unqualified ticket or issue requests, including requests with a bare identifier such as `ENG-123`. An explicit Jira request selects Jira; an explicit Linear request or `linear.app` issue URL selects Linear. Names appearing only in branch names, PR titles, code, or quoted issue content do not select a provider. Configured Jira credentials or project defaults do not override the Linear default. If a request names both providers without a clear target, ask which service to use. Do not add cross-service synchronization or fall back to Jira when Linear credentials are missing or a Linear request fails.
 
 **Intents**:
@@ -457,7 +459,7 @@ For issue management, select the provider before matching the action. Linear is 
 - `INTENT_UNSTAGE` - unstage a file, remove from staging
 - `INTENT_PUSH` - push, push my work, create PR, open PR
 - `INTENT_FIX_PUSH` - push failed, rejected, push error, can't push
-- `INTENT_UPDATE_PR` - update PR, add changes to PR, push more changes
+- `INTENT_UPDATE_PR` - update PR, add changes to PR, push more changes, link a Linear ticket to a PR, associate an issue with an existing PR
 - `INTENT_MERGE_COMPLETE` - merge complete, I merged it, PR was merged, done merging, merge the pr (when no open PR exists)
 - `INTENT_STATUS` - status, where am I, what's my situation, what's going on
 - `INTENT_DRAFT_PR` - draft PR, open draft, push as draft, WIP PR
@@ -517,6 +519,7 @@ sync with main            | Rebase your branch onto latest main
 push                      | Commit, sync, push, and create PR with auto-generated title and description
 push failed               | Diagnose why push was rejected and fix it
 update my PR              | Add new commits to existing PR
+link ENG-123 to my PR      | Add the Linear ID to the title and a magic-word link to the description
 I merged the PR           | Sync branch with main after PR is merged
 undo last commit          | Soft reset - undo commit but keep changes
 throw away changes        | Discard all uncommitted changes in your project folder

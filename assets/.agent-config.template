@@ -7,7 +7,7 @@ base_branch = "main"
 project_folder = ""
 github_username = ""
 
-# Optional Linear defaults. Keep LINEAR_API_KEY in the agent environment.
+# Filled by guided Linear setup. Credentials belong in ~/.zenith/.global-config.
 [linear]
 linear_team = ""
 linear_project = ""

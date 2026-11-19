@@ -97,6 +97,7 @@ If an edit was wrong and had to be fixed:
 
 ### Known lessons
 
+- Issue-only routing may skip Git synchronization and recovery, but must preserve first-time repo and provider setup. Test fresh and returning-user configuration flows before release.
 - `mapfile` requires bash 4+. macOS ships bash 3.2. Use `while IFS= read -r line; do array+=("$line"); done < <(...)` everywhere
 - `INTENT_PUSH` execution order must be: stage → commit → rebase → push. Rebasing with staged changes fails
 - Markdown links inside code fences are not clickable. PR URLs must use `open "url"` to open a browser
@@ -176,7 +177,7 @@ These cannot be negotiated or worked around:
 - **No `-i` flag on git commands.** `git rebase -i`, `git add -i` — never. Claude Code does not support interactive terminal input.
 - **No server, API, or external services.** Zenith runs entirely locally with git and bash.
 - **No package manager dependencies.** Nothing requiring npm, pip, cargo, or any installer beyond git and bash.
-- **`.agent-config` is never committed and never written by `ZENITH.md`.** It is personal. `setup.sh` writes it once. `ZENITH.md` only reads it.
+- **`.agent-config` is never committed and contains no credentials.** Guided repo/provider setup may create or update selected defaults while preserving other settings. Ordinary operations only read it; credentials belong in `~/.zenith/.global-config` or environment variables.
 - **No hardcoded org names, repo names, or paths.** Everything comes from `.agent-config`. The only exception is `scripts/setup.sh`, which has a `ZENITH_REPO` placeholder to update at publish time.
 - **Safety rules in `references/safety.md` are non-negotiable.** Do not relax them. They exist because Zenith targets users with mixed git skill levels in shared repos where a wrong commit or force push can affect the whole team.
 

@@ -37,7 +37,7 @@ These two outputs are enough to detect every dangerous state (S5–S9) and class
 
 Set `FETCH_DONE=false`. After intent is classified in Step 3, run the Phase 2 probe for that intent group before executing the Step 4 handler. Phase 2 runs after parent branch detection completes.
 
-If first-time setup ran (no `.agent-config` existed): skip Phase 2 and Step 1b entirely — proceed directly to Step 2.
+If first-time setup ran (no `.agent-config` existed): skip Phase 2 and Step 1b entirely. Linear issue requests continue to Step 3 after config validation below; other requests proceed to Step 2.
 
 If `REPO_ROOT` is empty (not inside a git repository): Stop. Error:
 ```
@@ -45,7 +45,7 @@ not a git repo — Zenith requires a git repository
 │ open Claude Code from inside a repo and try again
 ```
 
-**Issue and PR link routing:** After the minimal probe and repo-presence check, apply the provider and PR rules in Step 3. Linear issue-management requests, including branching for an issue, go directly to Step 3. Requests that only link Linear issues to an existing PR also go directly to Step 3, using `INTENT_UPDATE_PR`. For these two routes, read existing `.agent-config` values if present, but skip first-time repo setup, parent detection, Phase 2, auto-sync, and Step 2 recovery. Neither route changes Git state, except `INTENT_LINEAR_BRANCH`, which performs its own config and Git safety checks. Creating a PR or pushing code with a Linear link uses the normal Git workflow. Names appearing only in branch names, PR titles, code, or quoted content do not turn Git requests into issue-management requests. This exception does not apply to other requests.
+**Issue and PR link routing:** After the minimal probe and repo-presence check, apply the provider and PR rules in Step 3. Linear issue requests, including setup and branching for an issue, must complete the config parsing, first-time repo setup, and validation below before continuing to Step 3. Their handlers then run guided Linear setup when needed. Skip parent detection, Phase 2, auto-sync, and Step 2 recovery for these requests; skipping Git operations must not skip onboarding. Requests that only link supplied Linear IDs to an existing PR go directly to Step 3 using `INTENT_UPDATE_PR`, without repo or credential setup. Creating a PR or pushing code with a Linear link uses the normal Git workflow. Names appearing only in branch names, PR titles, code, or quoted content do not turn Git requests into issue-management requests.
 
 Parse `.agent-config` for:
 - `github_org` - GitHub organization
@@ -56,7 +56,21 @@ Parse `.agent-config` for:
 
 Use this robust parser that handles both quoted (`key = "value"`) and unquoted (`key = value`) INI formats, and ignores `# comments`:
 ```bash
-_cfg() { awk -F'[="]+' '/^[[:space:]]*'"$1"'[[:space:]]*=/{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2; exit}' "$2" 2>/dev/null; }
+_cfg() {
+  awk -v key="$1" '
+    $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+      value = substr($0, index($0, "=") + 1)
+      sub(/^[[:space:]]*/, "", value)
+      if (value ~ /^"/) {
+        sub(/^"/, "", value); sub(/"[[:space:]]*(#.*)?$/, "", value)
+        gsub(/\\"/, "\"", value); gsub(/\\\\/, "\\", value)
+      } else {
+        sub(/[[:space:]]*(#.*)?$/, "", value)
+      }
+      print value; exit
+    }
+  ' "$2" 2>/dev/null
+}
 github_org=$(_cfg github_org "$REPO_ROOT/.agent-config")
 github_repo=$(_cfg github_repo "$REPO_ROOT/.agent-config")
 base_branch=$(_cfg base_branch "$REPO_ROOT/.agent-config")
@@ -76,7 +90,7 @@ base_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|.*/
 [ -z "$base_branch" ] && base_branch="main"
 # Try gh CLI; fall back to global config
 github_username=$(gh api user --jq '.login' 2>/dev/null)
-[ -z "$github_username" ] && github_username=$(awk -F'[="]+' '/github_username/{gsub(/[[:space:]]/, "", $2); print $2; exit}' ~/.zenith/.global-config 2>/dev/null)
+[ -z "$github_username" ] && github_username=$(_cfg github_username ~/.zenith/.global-config)
 ```
 
 Print detected values. Ask only what could not be detected:
@@ -117,6 +131,8 @@ Continue — use the detected and collected values as the parsed config. Do not 
 
 **Validate config after parsing:**
 
+If a required repo/user setting is empty, use the first-time detection and prompts above to fill only missing values, preserving the existing file. Do not treat an empty `project_folder` as the repo root.
+
 ```bash
 [ -d "$REPO_ROOT/{project_folder}" ] || echo "FOLDER_MISSING"
 ```
@@ -129,6 +145,8 @@ config warning — project_folder does not exist on disk
 │ fix: edit {REPO_ROOT}/.agent-config and set project_folder to your actual folder
 ```
 Continue — do not stop, but surface the warning before every operation.
+
+For Linear issue requests, now continue directly to Step 3. The handler performs provider setup before the requested operation. Onboarding may write `.agent-config` and its `.gitignore` entry, but must not stage, commit, stash, fetch, sync, switch branches, or recover a merge. `INTENT_LINEAR_BRANCH` runs its own Git safety checks after setup.
 
 **Detect parent branch (stacked PR support):**
 
@@ -489,6 +507,7 @@ For issue management, select the provider before matching the action. Linear is 
 - `INTENT_JIRA_BRANCH` - create a branch for a Jira ticket, Jira branch AIE-123
 - `INTENT_JIRA_CLOSE` - close, resolve, complete, or mark a Jira ticket done
 - `INTENT_JIRA_DELETE` - delete a Jira ticket, remove a Jira issue
+- `INTENT_LINEAR_SETUP` - set up Linear, configure Linear credentials, set Linear team or project defaults
 - `INTENT_LINEAR_CREATE` - create a ticket, create issue, new ticket, new story, new task, new bug, new epic, create a Linear issue or ticket
 - `INTENT_LINEAR_VIEW` - show ticket, view ticket, what's ENG-123, open ticket, ticket details, look up ticket, view a Linear issue or Linear issue URL
 - `INTENT_LINEAR_LIST` - list tickets, my tickets, show board, assigned to me, open tickets, my Linear issues, Linear issues in a project
@@ -551,6 +570,7 @@ open worktree             | Check out a branch in a new directory — switch con
 list worktrees            | Show all active worktrees and their paths
 remove worktree           | Delete a linked worktree directory
 create a ticket           | Create a Linear issue in a team and optional project
+linear setup              | Configure Linear credentials and repo defaults
 show ticket ENG-123       | Display Linear issue details and its URL
 my tickets                | List your open Linear issues, optionally filtered by project
 update ticket summary     | Edit a Linear issue title or description
@@ -648,6 +668,7 @@ After classifying intent in Step 3, identify the intent file from this routing t
 | INTENT_JIRA_BRANCH | intents/jira.md |
 | INTENT_JIRA_CLOSE | intents/jira.md |
 | INTENT_JIRA_DELETE | intents/jira.md |
+| INTENT_LINEAR_SETUP | intents/linear.md |
 | INTENT_LINEAR_CREATE | intents/linear.md |
 | INTENT_LINEAR_VIEW | intents/linear.md |
 | INTENT_LINEAR_LIST | intents/linear.md |

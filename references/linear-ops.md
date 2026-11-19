@@ -4,9 +4,16 @@ Used by `intents/linear.md`. The shared request command is `CMD_LINEAR_GRAPHQL` 
 
 ## Authentication and config
 
-Use a personal API key from the agent process's `LINEAR_API_KEY` environment variable. Personal keys use `Authorization: <key>` without a Bearer prefix. Never print the key, put it in request JSON, enable shell tracing, or store it in `.agent-config`. If absent, direct the user to [Linear Security & access](https://linear.app/settings/account/security) and ask them to expose the key to their agent locally before retrying.
+Linear uses Zenith's existing global/repo configuration split. Store the personal API key in `~/.zenith/.global-config`:
 
-Repo defaults are optional, non-secret values:
+```ini
+[linear]
+linear_api_key = "your-personal-api-key"
+```
+
+Read the nonempty saved key first, then fall back to the agent's `LINEAR_API_KEY` environment variable. `CMD_LINEAR_GRAPHQL` implements this resolution on every request, including in a new shell. An environment-only key works without being copied to disk. Personal keys use `Authorization: <key>` without a Bearer prefix. Never print or dump credentials, put them in request JSON or shell arguments, enable shell tracing around them, or store them in `.agent-config`.
+
+Store non-secret repo defaults in `.agent-config`:
 
 ```ini
 [linear]
@@ -14,9 +21,35 @@ linear_team = "ENG"
 linear_project = ""
 ```
 
-`linear_team` accepts a team key, name, or UUID. `linear_project` accepts a project name or UUID; empty means no default project. Read the `[linear]` section as data, preserving spaces and punctuation inside quoted values. Do not execute or source the config. Do not write it automatically; show a snippet if the user wants to save selected defaults. Explicit request values override defaults. A project default is used only with its configured team; when the user selects a different team, omit that project default unless explicitly requested.
+`linear_team` accepts a team key, name, or UUID. `linear_project` accepts a project name or UUID; an empty saved value means no default project. Read only the `[linear]` section as data, preserving spaces and punctuation inside quoted values. Do not execute or source either config file. Explicit request values override defaults for that request. A project default is used only with its configured team; when the user selects a different team, omit that project's default unless explicitly requested.
 
-For creating and listing issues, resolve the team first with `LinearTeams`. Match UUIDs and keys exactly, names case-insensitively. Ask on multiple matches or missing defaults when several teams are available. An invalid configured value is an error, not permission to choose another team. Resolve a requested project using `LinearProjects` within that team. Reject absent or ambiguous project matches rather than dropping the filter or creating a project. Existing-issue operations use the fetched issue's team and project, independent of defaults.
+## Guided first-time setup
+
+Run the ordinary first-time repo setup from `ZENITH.md` first when `.agent-config` is absent. Then run these independent Linear setup steps before the original issue operation. Existing Git and Jira users receive Linear setup on their first Linear request; do not reinitialize their files or invoke Jira setup. PR-only linking with supplied IDs does not need this setup.
+
+1. **Credentials:** Reuse a saved key or environment fallback unless the user explicitly asks to replace it. When a key is missing or replacement is requested, explain that it will be saved once for all repos and start hidden local entry with:
+
+   ```bash
+   bash "$HOME/.zenith/scripts/setup.sh" --linear
+   ```
+
+   Use a user-controlled terminal, not an agent terminal whose only input path is chat. If the client cannot accept hidden terminal input, show that command for the user to run in their local Terminal, wait for them to finish, then resume. Do not ask them to paste the key into chat or edit their shell profile. The script prompts for the key, updates only `[linear].linear_api_key`, preserves GitHub/Jira settings, and saves the global config with mode `600`. Empty or cancelled input leaves the file unchanged. The normal installer and daily updates never run this prompt.
+
+2. **Validation:** Execute `LinearViewer` with `CMD_LINEAR_GRAPHQL`. On an authentication failure, stop the original operation and offer the same local setup command to replace the key. Do not silently fall back from a rejected saved key to a different environment credential, and never fall back to Jira.
+
+3. **Repo defaults:** If `linear_team` is missing or empty, fetch `LinearTeams` and ask the user to select the repo's default team. Prefill a team from the request or a fetched issue when available, but do not silently persist a per-request override. If the `linear_project` key is absent, fetch the selected team's projects and offer an optional default; Enter means none. A present empty project value is already configured. Resolve all selections and pagination before saving; cancellation or invalid scope must not write partial defaults or execute the original mutation.
+
+   ```text
+   linear repo setup
+   | default team:
+   | default project [Enter for none]:
+   ```
+
+4. **Save and continue:** Add or update only the selected `[linear]` keys in `.agent-config`, preserving existing repo/user/Jira settings and comments. Keep one `[linear]` section and one entry per key. Escape quotes and backslashes when storing names, and decode them on read. Keep the config ignored by Git. Report the team/project, then continue the original request in the same workflow; setup itself does not create issues, move statuses, or perform Git synchronization.
+
+Run setup again only for missing settings or when explicitly requested through `linear setup`. For a requested team-default change, also select or clear the default project so a project from the old team is not retained. Once onboarding is complete, normal issue operations use the saved configuration without prompting again; explicit one-off overrides are not persisted.
+
+For creating and listing issues, resolve the requested or configured team with `LinearTeams`. Match UUIDs and keys exactly, names case-insensitively. Ask on multiple matches. An invalid configured value is an error, not permission to choose another team; offer guided setup to correct it. Resolve a requested project using `LinearProjects` within that team. Reject absent or ambiguous project matches rather than dropping the filter or creating a project. Existing-issue operations use the fetched issue's team and project, independent of defaults.
 
 ## Requests and responses
 

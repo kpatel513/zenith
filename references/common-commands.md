@@ -681,10 +681,31 @@ curl -s \
 
 ### CMD_LINEAR_GRAPHQL
 
-Prepare the request file and private response paths as described in `references/linear-ops.md`. Keep the environment key out of command arguments and files by passing the header through stdin. Run with shell tracing disabled.
+Prepare the request file and private response paths as described in `references/linear-ops.md`. Resolve credentials on every call because shell variables may not persist between agent commands. The stored key takes precedence; `LINEAR_API_KEY` is a fallback. Keep credentials out of command arguments, output, and request files by passing the header through stdin. Run with shell tracing disabled.
 
 ```bash
-linear_http_code=$(printf 'Authorization: %s\n' "$LINEAR_API_KEY" | \
+linear_api_key=""
+linear_global_config="${ZENITH_DIR:-$HOME/.zenith}/.global-config"
+if [ -f "$linear_global_config" ]; then
+  linear_api_key=$(awk '
+    /^[[:space:]]*\[/ { in_linear = $0 ~ /^[[:space:]]*\[linear\][[:space:]]*(#.*)?$/; next }
+    in_linear && /^[[:space:]]*linear_api_key[[:space:]]*=/ {
+      value = substr($0, index($0, "=") + 1)
+      sub(/^[[:space:]]*/, "", value); sub(/[[:space:]]*$/, "", value)
+      if (value ~ /^".*"$/) {
+        sub(/^"/, "", value); sub(/"$/, "", value)
+        gsub(/\\"/, "\"", value); gsub(/\\\\/, "\\", value)
+      }
+      print value; exit
+    }
+  ' "$linear_global_config") || exit 1
+fi
+linear_api_key=${linear_api_key:-${LINEAR_API_KEY:-}}
+if [ -z "$linear_api_key" ]; then
+  printf 'Linear credentials missing; run the guided Linear setup.\n' >&2
+  exit 1
+fi
+linear_http_code=$(printf 'Authorization: %s\n' "$linear_api_key" | \
   curl --silent --show-error --connect-timeout 10 --max-time 30 \
     --request POST --header @- \
     --header 'Content-Type: application/json' \

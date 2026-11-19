@@ -426,6 +426,176 @@ test_gh_not_installed() {
 }
 
 # ---------------------------------------------------------------------------
+# Linear credential setup and request authentication
+# ---------------------------------------------------------------------------
+
+test_linear_setup() {
+    echo
+    echo "test: guided Linear credentials"
+    local root config output status input
+    root=$(mktemp -d)
+    config="$root/install/.global-config"
+    output="$root/output"
+    input="$root/input"
+    printf 'lin_test_first\n' > "$input"
+    ZENITH_DIR="$root/install" TTY="$input" bash "$REPO_ROOT/scripts/setup.sh" --linear > "$output" 2>&1
+    status=$?
+    assert_exit_zero "$status" "Linear setup succeeds without a prior install marker"
+    assert_contains 'linear_api_key = "lin_test_first"' "$config" "key stored in global config"
+    assert_not_contains 'lin_test_first' "$output" "key not printed"
+    [ "$(LC_ALL=C ls -l "$config" | cut -c1-10)" = '-rw-------' ] \
+        && pass "global config is private" || fail "global config is private"
+    [ ! -e "$root/install/.setup-complete" ] \
+        && pass "credential setup does not run the installer" || fail "credential setup does not run the installer"
+
+    cat > "$config" <<'EOF'
+[user]
+github_username = "existing-user"
+[jira]
+jira_api_token = "jira_test_token"
+# Preserve this comment and the other provider settings.
+[linear]
+linear_api_key = "lin_old"
+custom_setting = "preserve"
+[other]
+linear_api_key = "unrelated"
+EOF
+    printf 'lin_test_replacement\n' > "$input"
+    ZENITH_DIR="$root/install" TTY="$input" bash "$REPO_ROOT/scripts/setup.sh" --linear > "$output" 2>&1
+    assert_exit_zero "$?" "Linear setup updates an existing key"
+    assert_contains 'existing-user' "$config" "GitHub settings preserved"
+    assert_contains 'jira_test_token' "$config" "Jira credentials preserved"
+    assert_contains '# Preserve this comment' "$config" "comments preserved"
+    assert_contains 'custom_setting = "preserve"' "$config" "other Linear settings preserved"
+    assert_contains 'linear_api_key = "unrelated"' "$config" "similarly named fields in other sections preserved"
+    assert_not_contains 'lin_old' "$config" "old Linear key replaced"
+    [ "$(grep -c '^\[linear\]$' "$config")" -eq 1 ] \
+        && pass "no duplicate Linear section" || fail "no duplicate Linear section"
+    assert_not_contains 'lin_test_replacement' "$output" "replacement key not printed"
+
+    cp "$config" "$root/before"
+    for input in /dev/null "$root/blank" "$root/invalid"; do
+        printf '\n' > "$root/blank"
+        printf 'lin_test\rkey\n' > "$root/invalid"
+        ZENITH_DIR="$root/install" TTY="$input" bash "$REPO_ROOT/scripts/setup.sh" --linear > "$output" 2>&1
+        assert_exit_nonzero "$?" "cancelled or invalid key rejected ($input)"
+        cmp -s "$config" "$root/before" \
+            && pass "failed setup preserves global config" || fail "failed setup preserves global config"
+    done
+    touch "$root/install/.setup-complete"
+    ZENITH_DIR="$root/install" TTY=/dev/null \
+        GLOBAL_COMMANDS_DIR="$root/claude" GLOBAL_CURSOR_RULES_DIR="$root/cursor" \
+        GLOBAL_CODEX_SKILLS_DIR="$root/codex" GLOBAL_GEMINI_COMMANDS_DIR="$root/gemini" \
+        bash "$REPO_ROOT/scripts/setup.sh" > "$output" 2>&1
+    assert_exit_zero "$?" "normal installer rerun does not prompt for credentials"
+    cmp -s "$config" "$root/before" \
+        && pass "normal installer rerun preserves credentials" || fail "normal installer rerun preserves credentials"
+    rm -rf "$root"
+}
+
+test_linear_authentication() {
+    echo
+    echo "test: Linear authentication uses saved credentials and environment fallback"
+    local root scenario expected fallback status output
+    root=$(mktemp -d)
+    mkdir -p "$root/install" "$root/bin"
+    awk '
+        /^### CMD_LINEAR_GRAPHQL$/ { section = 1; next }
+        section && /^```bash$/ { block = 1; next }
+        block && /^```$/ { exit }
+        block { print }
+    ' "$REPO_ROOT/references/common-commands.md" > "$root/request.sh"
+    cat > "$root/bin/curl" <<'SH'
+#!/bin/sh
+printf '%s\n' "$@" > "$ZENITH_LINEAR_TEST_ARGS"
+cat > "$ZENITH_LINEAR_TEST_HEADER"
+printf '200'
+SH
+    chmod +x "$root/bin/curl"
+    for scenario in stored stored_only fallback blank missing literal; do
+        expected="lin_saved"
+        fallback="lin_environment"
+        printf '[other]\nlinear_api_key = "wrong_section"\n[linear]\nlinear_api_key = "lin_saved"\n' > "$root/install/.global-config"
+        case "$scenario" in
+            stored_only)
+                fallback=""
+                ;;
+            fallback)
+                printf '[jira]\njira_api_token = "jira_only"\n' > "$root/install/.global-config"
+                expected="$fallback"
+                ;;
+            blank)
+                printf '[linear]\nlinear_api_key = ""\n' > "$root/install/.global-config"
+                expected="$fallback"
+                ;;
+            missing)
+                : > "$root/install/.global-config"
+                fallback=""
+                ;;
+            literal)
+                expected='lin_test_"quotes"_\\_$(touch injected)_`touch injected`'
+                printf '%s\n' "$expected" > "$root/input"
+                ZENITH_DIR="$root/install" TTY="$root/input" bash "$REPO_ROOT/scripts/setup.sh" --linear > "$root/setup-output" 2>&1
+                ;;
+        esac
+        rm -f "$root/header" "$root/args"
+        output=$(cd "$root" && ZENITH_DIR="$root/install" LINEAR_API_KEY="$fallback" \
+            ZENITH_LINEAR_TEST_ARGS="$root/args" ZENITH_LINEAR_TEST_HEADER="$root/header" \
+            linear_request_file="$root/request.json" linear_response_file="$root/response.json" \
+            linear_headers_file="$root/headers" PATH="$root/bin:$PATH" bash "$root/request.sh" 2>&1)
+        status=$?
+        if [ "$scenario" = missing ]; then
+            assert_exit_nonzero "$status" "missing credentials stop the request"
+            [ ! -e "$root/header" ] && pass "no API call without credentials" || fail "no API call without credentials"
+        else
+            assert_exit_zero "$status" "$scenario credentials accepted"
+            printf 'Authorization: %s\n' "$expected" > "$root/expected-header"
+            cmp -s "$root/header" "$root/expected-header" \
+                && pass "$scenario header uses the correct literal key" || fail "$scenario header uses the correct literal key"
+            if printf '%s' "$output" | grep -Fq "$expected" || grep -Fq "$expected" "$root/args"; then
+                fail "$scenario key leaked in output or arguments"
+            else
+                pass "$scenario key stays out of output and arguments"
+            fi
+        fi
+    done
+    [ ! -e "$root/injected" ] && pass "credential text never executes as shell code" || fail "credential text never executes as shell code"
+    rm -rf "$root"
+}
+
+test_repo_config_parser() {
+    echo
+    echo "test: startup reads the config format written by onboarding"
+    local root key expected actual
+    root=$(mktemp -d)
+    awk '/^_cfg\(\) \{/ { block = 1 } block { print } block && /^\}$/ { exit }' \
+        "$REPO_ROOT/ZENITH.md" > "$root/parser.sh"
+    cat > "$root/.agent-config" <<'EOF'
+[repo]
+github_org = "fixture"
+github_repo = "fixture-repo" # trailing comment
+base_branch = main # unquoted value
+[user]
+project_folder = "team/data #1=\"quoted\"\\models"
+github_username = "fixture-user"
+EOF
+    for key in github_org github_repo base_branch project_folder github_username missing; do
+        case "$key" in
+            github_org) expected=fixture ;;
+            github_repo) expected=fixture-repo ;;
+            base_branch) expected=main ;;
+            project_folder) expected='team/data #1="quoted"\models' ;;
+            github_username) expected=fixture-user ;;
+            missing) expected='' ;;
+        esac
+        actual=$(bash -c '. "$1"; _cfg "$2" "$3"' _ "$root/parser.sh" "$key" "$root/.agent-config")
+        [ "$actual" = "$expected" ] \
+            && pass "startup parses $key" || fail "startup parses $key"
+    done
+    rm -rf "$root"
+}
+
+# ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
 
@@ -446,6 +616,9 @@ test_gemini_symlink_repair
 test_symlink_repair
 test_cron_uses_fetch_reset
 test_gh_not_installed
+test_linear_setup
+test_linear_authentication
+test_repo_config_parser
 
 echo
 echo "results: $PASS passed, $FAIL failed"

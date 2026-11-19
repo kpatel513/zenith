@@ -140,7 +140,7 @@ Done. Every subsequent `/zenith` command in that repo runs without asking anythi
 | Claude Code command | `~/.claude/commands/zenith.md` | Makes `/zenith` work in every session |
 | Cursor rule | `~/.cursor/rules/zenith.mdc` | Makes `@zenith` work (if Cursor is installed) |
 | Codex skill | `~/.codex/skills/zenith/` | Makes `$zenith` work (if Codex CLI is installed) |
-| Global config | `~/.zenith/.global-config` | Stores your GitHub username and Jira credentials |
+| Global config | `~/.zenith/.global-config` | Stores your GitHub username and Jira/Linear credentials |
 
 New machine or reinstalling? The installer is safe to re-run.
 
@@ -306,9 +306,15 @@ Credentials are saved to `~/.zenith/.global-config` and reused across every repo
 
 Linear is the default for ticket and issue requests. Zenith manages Linear issues through the GraphQL API using a personal API key. It supports creation, viewing, listing, editing, status changes, assignment, branches, completion, and deletion. Issues can be scoped to a team and an existing project.
 
-Create a personal key in [Linear Security & access](https://linear.app/settings/account/security), then expose it as `LINEAR_API_KEY` in the environment of the agent running Zenith. Keep the key out of chat and repository files. No Linear SDK or additional package is required.
+On your first Linear command, Zenith completes the normal repo setup and guides you through Linear credentials and defaults. Create a personal key in [Linear Security & access](https://linear.app/settings/account/security). Zenith uses hidden local terminal input and saves the key under `[linear]` as `linear_api_key` in `~/.zenith/.global-config`, with access restricted to your user. The saved key is reused across repos. Keep it out of chat and repository files.
 
-Add optional defaults to your repo's `.agent-config`:
+If your client cannot accept hidden terminal input, Zenith asks you to run this locally, then resumes setup when you return:
+
+```bash
+bash ~/.zenith/scripts/setup.sh --linear
+```
+
+Zenith then asks for a default team and an optional project, validates the choices, and saves them in your repo's `.agent-config`:
 
 ```ini
 [linear]
@@ -316,7 +322,9 @@ linear_team = "ENG"
 linear_project = ""
 ```
 
-The team can be a key, name, or UUID. The project can be a name or UUID; leave it empty for no default project. Without defaults, Zenith resolves the scope for the current request. Explicit team and project selections override defaults. Existing-issue changes use the issue's actual team.
+The team can be a key, name, or UUID. The project can be a name or UUID; leave it empty for no default project. Returning users reuse these settings without setup prompts. Explicit team and project selections override defaults for that request; existing-issue changes use the issue's actual team. Use `$zenith linear setup` to finish or change setup.
+
+For CI or users who prefer environment configuration, `LINEAR_API_KEY` remains a fallback when no nonempty key is saved globally. An environment key is not copied to disk. No Linear SDK or additional package is required.
 
 Use `$zenith` in Codex, `/zenith` in Claude Code and Gemini, or `@zenith` in Cursor:
 
@@ -337,7 +345,7 @@ $zenith linear delete ENG-123
 
 `linear list` shows your open issues by default, with an optional project filter. Ask for all assignees, all projects, closed issues, or more results to change that scope. Status choices come from the issue's team. Updates change only requested fields. Deletion requires typing the issue identifier and uses Linear's normal trash workflow.
 
-You can also name Linear explicitly or provide a Linear issue URL. To use Jira, name it explicitly, for example `$zenith jira create a ticket`. Jira credentials and project defaults do not change the provider selection. If `LINEAR_API_KEY` is missing or a Linear request fails, Zenith reports the problem without falling back to Jira. Linear issue commands leave Git state alone; `branch from ticket` and `linear branch` check the working tree, create a branch, and push it after confirmation. Creating or updating Linear Projects is outside this integration's scope.
+You can also name Linear explicitly or provide a Linear issue URL. To use Jira, name it explicitly, for example `$zenith jira create a ticket`. Jira credentials and project defaults do not change the provider selection. Missing Linear credentials trigger setup; failed requests report the problem without falling back to Jira. Onboarding may update config and `.gitignore`, but ticket operations do not sync or switch Git branches. `branch from ticket` and `linear branch` check the working tree, create a branch, and push it after confirmation. Creating or updating Linear Projects is outside this integration's scope.
 
 See [Linear API operations](references/linear-ops.md) for authentication, request handling, and official API sources.
 
@@ -385,7 +393,7 @@ github_username = "alice"
 jira_project = "AIE"
 ```
 
-Edit this file any time to update your settings. Jira credentials (URL, email, token) are stored in `~/.zenith/.global-config`, not here.
+`project_folder` is relative to the repository root. Set it to `"."` to use the whole repository. You can edit these defaults at any time. Zenith stores Jira and Linear credentials in `~/.zenith/.global-config`.
 
 ---
 

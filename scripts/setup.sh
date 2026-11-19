@@ -10,6 +10,56 @@ ZENITH_REPO="${ZENITH_REPO:-https://github.com/kpatel513/zenith.git}"
 # When piped (curl | bash), stdin is the pipe — read prompts from the terminal instead.
 # Tests override this to /dev/stdin to inject input via heredoc.
 TTY="${TTY:-/dev/tty}"
+
+# Keep credential entry out of chat, shell history, and command arguments.
+if [ "${1:-}" = "--linear" ]; then
+    set +x
+    echo "Linear setup: https://linear.app/settings/account/security"
+    if ! IFS= read -r -s -p "Linear API key (input hidden): " linear_key <"$TTY"; then
+        echo "Linear setup cancelled; credentials were not changed." >&2
+        exit 1
+    fi
+    echo
+    case "$linear_key" in
+        ''|*$'\r'*|*$'\n'*)
+            echo "A nonempty, single-line Linear API key is required." >&2
+            exit 1
+            ;;
+    esac
+
+    umask 077
+    mkdir -p "$ZENITH_DIR"
+    linear_config="$ZENITH_DIR/.global-config"
+    linear_config_tmp=$(mktemp "$ZENITH_DIR/.global-config.XXXXXX")
+    trap 'rm -f "$linear_config_tmp"' EXIT
+    linear_key=${linear_key//\\/\\\\}
+    linear_key=${linear_key//\"/\\\"}
+    {
+        printf 'linear_api_key = "%s"\n' "$linear_key"
+        if [ -f "$linear_config" ]; then cat "$linear_config"; fi
+    } | awk '
+        NR == 1 { key_line = $0; next }
+        /^[[:space:]]*\[/ {
+            if (in_linear && !written) { print key_line; written = 1 }
+            in_linear = $0 ~ /^[[:space:]]*\[linear\][[:space:]]*(#.*)?$/
+            if (in_linear) seen = 1
+        }
+        in_linear && /^[[:space:]]*linear_api_key[[:space:]]*=/ {
+            if (!written) { print key_line; written = 1 }
+            next
+        }
+        { print }
+        END {
+            if (!seen) { print ""; print "[linear]" }
+            if (!written) print key_line
+        }
+    ' > "$linear_config_tmp"
+    mv "$linear_config_tmp" "$linear_config"
+    unset linear_key
+    echo "Linear key saved in $linear_config. Return to Zenith to finish team/project setup."
+    exit 0
+fi
+
 # Tests override this to avoid touching real ~/.claude/commands
 GLOBAL_COMMANDS_DIR="${GLOBAL_COMMANDS_DIR:-$HOME/.claude/commands}"
 # Tests override this to avoid touching real ~/.cursor/rules

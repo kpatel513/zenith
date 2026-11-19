@@ -419,13 +419,21 @@ Same phrase in different situations should produce different behavior.
 
 ## Linear issue workflows
 
-Use an isolated test workspace for mutations. Set `LINEAR_API_KEY` in the agent environment and use real team/project IDs from that workspace. These examples use Codex's `$zenith` invocation.
+Use an isolated test workspace for mutations and real team/project IDs from that workspace. Configure a saved key through guided setup or use the `LINEAR_API_KEY` fallback. These examples use Codex's `$zenith` invocation.
 
 | Scenario | Expected |
 |----------|----------|
-| `$zenith my tickets` or `$zenith linear list` with the key unset and Jira credentials configured | Explains the Linear environment-key requirement; sends no API request, never requests a key in chat, and does not fall back to Jira |
+| `$zenith create a ticket "Fix login timeout"` with no repo config, saved key, or environment key | Runs ordinary repo setup, guides hidden credential entry, validates the key, asks for team/optional project, saves defaults, then resumes issue creation; no Git sync or Jira setup |
+| `$zenith my tickets` with Jira configured but no Linear credentials | Guides Linear credential setup while preserving GitHub/Jira settings; does not request a key in chat or require a shell-profile edit |
+| A client has no user-controlled terminal for hidden key entry | Gives the local `setup.sh --linear` command and waits for completion, then resumes; no request for a key in chat |
+| Fresh repo with a saved global key and no environment key | Runs repo setup and team/project selection; reuses the saved key without asking for it again |
+| Existing repo with an environment key and no saved key | Uses the environment fallback, saves selected repo defaults, and does not copy the key to disk |
+| Saved key and environment key both present | Uses the saved key; an authentication error stops the request without switching credentials or providers |
+| Returning user with a valid team and `linear_project = ""` | Runs the issue operation without repeating setup; the empty project remains a deliberate choice |
+| Cancel credential or team/project setup; or select an invalid project | Makes no issue mutation; preserves existing settings and does not save partial repo defaults |
+| `$zenith linear setup` to change the default team | Validates the new team, selects or clears its default project, preserves other sections, and makes no issue mutation |
 | `$zenith view ticket ENG-123` or `$zenith linear view ENG-123` while local main is behind or a merge is in progress | Reads the Linear issue without fetching, syncing, switching branches, or recovering the merge |
-| `$zenith create a ticket "Fix login timeout"` with Jira configured and no `[linear]` defaults | Selects Linear, resolves the team for this request, previews the issue, and creates it only after authorization; does not invoke Jira setup |
+| `$zenith create a ticket "Fix login timeout"` with Jira configured and no `[linear]` defaults | Selects Linear, saves validated repo defaults through guided setup, then previews the issue and creates it only after authorization; does not invoke Jira setup |
 | `$zenith view ticket ENG-123` or `$zenith what's AIE-123` without naming a provider | Selects Linear regardless of the identifier prefix or Jira configuration |
 | `$zenith my tickets`, `update ticket ENG-123`, `move ticket ENG-123 to in progress`, `assign ENG-123 to me`, `branch from ticket ENG-123`, `close ticket ENG-123`, or `delete ticket ENG-123` | Selects the corresponding Linear handler and keeps its existing mutation and branch safety checks |
 | `$zenith jira create a ticket` or `$zenith jira view ticket AIE-123` | Selects Jira even when Linear defaults and credentials are configured |
@@ -434,7 +442,7 @@ Use an isolated test workspace for mutations. Set `LINEAR_API_KEY` in the agent 
 | `$zenith create a branch kp/linear-support` | Uses the Git branch workflow and its diagnostics; a branch name does not select Linear issue management |
 | `$zenith create a branch kp/jira-support`, `$zenith push`, or `$zenith update my PR` | Uses the Git workflow; the Linear default applies only to issue management |
 | `$zenith view https://linear.app/example/issue/ENG-123/example` | Routes to Linear and sends the identifier to the fixed API endpoint |
-| Create with no configured team and multiple accessible teams | Asks for a team; does not create an issue or write config before selection |
+| Create with no configured team and multiple accessible teams | Asks for a team and optional project; saves only validated selections before continuing |
 | Create with a title containing quotes, newlines, backticks, and `$()` | Preserves literal content in JSON variables; executes no embedded shell content |
 | List for a configured project that is missing from the selected team | Reports the scope error; does not silently list all projects |
 | Override the configured team while a default project is set | Omits the old team's default project unless explicitly requested |

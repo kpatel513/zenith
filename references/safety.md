@@ -87,20 +87,7 @@ fi
 
 ## Rule 5: Always Read Repo State Before Acting
 
-**Enforcement**: Run full diagnostic sequence (diagnostics.md) on every invocation before interpreting user request.
-
-```bash
-# Non-negotiable sequence
-cat .agent-config
-git status --short
-git branch --show-current
-git log --oneline -5
-git stash list
-git remote -v
-git log HEAD..origin/{base_branch} --oneline 2>/dev/null | wc -l
-git diff --stat HEAD
-git diff --cached --stat
-```
+**Enforcement**: Always run the minimal probe in `ZENITH.md` Step 1, then the diagnostics required by the selected intent. Complete missing repo/provider setup before the requested operation. Linear issue requests skip Git synchronization and recovery; the Linear branch handler still performs its own Git safety checks before branching.
 
 **Rationale**: Cannot provide correct operation without understanding current state.
 
@@ -216,11 +203,11 @@ git push origin {current_branch}
 
 **Rationale**: Prevents conflicts in PR. Ensures clean merge into base branch.
 
-## Rule 12: Never Modify .agent-config Programmatically
+## Rule 12: Preserve Personal Configuration
 
-**Enforcement**: setup.sh writes it once. zenith.md only reads it, never writes.
+**Enforcement**: Guided first-time setup may create `.agent-config` and save the user's selected repo/provider defaults. Explicit setup requests may update those selected settings. Preserve existing values, unrelated sections, and comments; do not rewrite defaults for ordinary per-request overrides. Keep `.agent-config` ignored by Git and free of credentials. Store credentials only in the private global config or use environment variables.
 
-**Rationale**: Config is personal to each user. Modifying it programmatically could break their setup.
+**Rationale**: Users need guided onboarding without losing their existing setup or committing credentials.
 
 ## Rule 13: Always Show Next Action After Operation
 
@@ -253,27 +240,9 @@ fi
 
 **Rationale**: All work must be on feature branches, not base branch.
 
-## Rule 15: Always Validate .agent-config Exists and Is Valid
+## Rule 15: Initialize and Validate Required Configuration
 
-**Enforcement**: First step of diagnostic sequence:
-
-```bash
-if [ ! -f .agent-config ]; then
-    echo "Error: no .agent-config found"
-    echo "Run setup.sh first"
-    exit 1
-fi
-
-# Parse and validate required fields
-GITHUB_ORG=$(grep "github_org" .agent-config | cut -d'"' -f2)
-PROJECT_FOLDER=$(grep "project_folder" .agent-config | cut -d'"' -f2)
-
-if [ -z "$GITHUB_ORG" ] || [ -z "$PROJECT_FOLDER" ]; then
-    echo "Error: .agent-config is incomplete"
-    echo "Re-run setup.sh"
-    exit 1
-fi
-```
+**Enforcement**: Follow the setup and routing rules in `ZENITH.md`. For intents requiring repo configuration, a missing `.agent-config` starts guided repo setup. Validate the resulting settings before continuing. If an existing file lacks required settings, ask for those values and preserve the rest. Cancellation stops the pending operation. PR-only linking with supplied issue IDs follows its documented metadata-only route and does not require repo/provider onboarding.
 
 **Rationale**: Cannot operate safely without valid configuration.
 

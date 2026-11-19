@@ -2,15 +2,11 @@
 
 ## First-time install
 
-Run the same `setup.sh` installer and answer **y** to the Cursor question. That creates `~/.cursor/rules/zenith.mdc`, which makes `@zenith` available in every Cursor session on your machine.
+Open Cursor once, then run the [Zenith installer](../README.md#install). It detects `~/.cursor` and links the rule at `~/.cursor/rules/zenith.mdc`, making `@zenith` available across repos.
 
 ## Already have Zenith installed?
 
-Setup won't re-run if Zenith is already installed. Add Cursor support with one command:
-
-```bash
-mkdir -p ~/.cursor/rules && ln -s ~/.zenith/.cursor/rules/zenith.mdc ~/.cursor/rules/zenith.mdc
-```
+If you added Cursor after installing Zenith, open Cursor once and rerun the installer to add or repair its rule. If `@zenith` already works, run `@zenith update zenith` in a repo to get the latest version.
 
 ## How to invoke
 
@@ -27,20 +23,9 @@ Cursor will show a dropdown when you type `@` — select **zenith** from the lis
 
 ## First use in a repo
 
-The first time you run `@zenith` in a repo that hasn't been configured, Zenith walks you through the same 4-question setup as Claude Code:
+Run `@zenith help` inside your repo. Zenith detects the repo settings and asks for your project folder. Enter `.` for the whole repo. If you've already configured this repo in another client, Cursor reuses its `.agent-config`.
 
-```
-first-time setup — no config found for this repo
-│ detected: /Users/alice/code/company-repo
-│ answering 4 questions configures Zenith for this repo permanently
-
-Your project folder (or . for whole repo): team-ml/recommendations
-GitHub organization:                       acme-corp
-GitHub repository:                         company-repo
-Base branch [main]:                        main
-```
-
-If you've already configured the repo via Claude Code, `@zenith` picks up the same `.agent-config` — no duplicate setup.
+To use Linear, run `@zenith linear setup`, then `@zenith my tickets` to verify. Cursor reuses any saved Linear key on this machine and any team and project defaults in this repo. See [Set up Linear](../README.md#set-up-linear) for the credential prompt and project choices.
 
 ## Model compatibility
 

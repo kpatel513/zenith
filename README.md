@@ -84,12 +84,13 @@ Zenith knows which folder is yours. It only commits your files, warns you if any
 - [GitHub CLI (gh)](https://cli.github.com) — run `gh --version` to check; install with `brew install gh` then `gh auth login`
 - A GitHub repo you have push access to
 - macOS or Linux
-- [Claude Code](https://claude.ai/code) — if using `/zenith` in Claude Code
-- [Cursor](https://cursor.com) — if using `@zenith` in Cursor (any model works)
+- One of [Claude Code](https://claude.ai/code), Codex CLI, [Cursor](https://cursor.com), or Gemini CLI.
 
 ---
 
 ## Install
+
+**Already using Zenith?** Go straight to [Set up Linear](#set-up-linear) for the update, setup, and verification commands for your client.
 
 ### Step 1 — Run the installer (once per machine)
 
@@ -102,13 +103,11 @@ That's it. The installer:
 - Installs adapters for any tools it finds — Cursor, Codex CLI, Gemini CLI — automatically
 - Sets up a daily background update so you always have the latest version
 
-### Step 2 — Open Claude Code in a repo and run any /zenith command
+### Step 2: Open your coding assistant in a repo
 
-```
-/zenith start new work
-```
+Run `/zenith help` in Claude Code or Gemini CLI, `$zenith help` in Codex, or `@zenith help` in Cursor.
 
-First time in a repo, Zenith detects your org, repo, and base branch from git and asks one question:
+On first use, Zenith detects your GitHub org, repository, and base branch, then asks which folder you work in. Enter `.` for the whole repository. It asks for your GitHub username if it cannot detect it.
 
 ```
 setting up zenith — detected from your repo
@@ -120,15 +119,7 @@ setting up zenith — detected from your repo
   ✓ gitignore     .agent-config will not be committed
 ```
 
-Done. Every subsequent `/zenith` command in that repo runs without asking anything.
-
-**Adding a new repo?** Open Claude Code in that repo and run any `/zenith` command — same one-question setup.
-
-**Verify it worked:**
-
-```
-/zenith help
-```
+Zenith reuses these settings across clients in this repo. Each new repo gets its own setup. If you use Linear, follow [Set up Linear](#set-up-linear) now, or run your first ticket command and Zenith will guide you through it.
 
 ---
 
@@ -140,6 +131,7 @@ Done. Every subsequent `/zenith` command in that repo runs without asking anythi
 | Claude Code command | `~/.claude/commands/zenith.md` | Makes `/zenith` work in every session |
 | Cursor rule | `~/.cursor/rules/zenith.mdc` | Makes `@zenith` work (if Cursor is installed) |
 | Codex skill | `~/.codex/skills/zenith/` | Makes `$zenith` work (if Codex CLI is installed) |
+| Gemini command | `~/.gemini/commands/zenith.toml` | Makes `/zenith` work in Gemini CLI |
 | Global config | `~/.zenith/.global-config` | Stores your GitHub username and Jira/Linear credentials |
 
 New machine or reinstalling? The installer is safe to re-run.
@@ -148,7 +140,7 @@ New machine or reinstalling? The installer is safe to re-run.
 
 ## Using Zenith in Cursor
 
-Works via `@zenith`. If Cursor is installed when you run the installer, the adapter is set up automatically. Already installed Zenith but added Cursor later? One-liner to add Cursor support manually:
+Use `@zenith` in Cursor. The installer sets up the adapter when it detects Cursor. If you added Cursor later, run the installer again to add the rule.
 
 → [Full Cursor setup and model compatibility](docs/cursor.md)
 
@@ -306,15 +298,26 @@ Credentials are saved to `~/.zenith/.global-config` and reused across every repo
 
 Linear is the default for ticket and issue requests. Zenith manages Linear issues through the GraphQL API using a personal API key. It supports creation, viewing, listing, editing, status changes, assignment, branches, completion, and deletion. Issues can be scoped to a team and an existing project.
 
-On your first Linear command, Zenith completes the normal repo setup and guides you through Linear credentials and defaults. Create a personal key in [Linear Security & access](https://linear.app/settings/account/security). Zenith uses hidden local terminal input and saves the key under `[linear]` as `linear_api_key` in `~/.zenith/.global-config`, with access restricted to your user. The saved key is reused across repos. Keep it out of chat and repository files.
+### Set up Linear
 
-If your client cannot accept hidden terminal input, Zenith asks you to run this locally, then resumes setup when you return:
+Open your coding assistant in the repo where you want to use Linear. Existing users start with **Update**. If you just installed Zenith, start with **Configure**. Run **Verify** after setup finishes.
 
-```bash
-bash ~/.zenith/scripts/setup.sh --linear
-```
+| Client | Update | Configure | Verify |
+|--------|--------|-----------|--------|
+| Claude Code or Gemini CLI | `/zenith update zenith` | `/zenith linear setup` | `/zenith my tickets` |
+| Codex CLI | `$zenith update zenith` | `$zenith linear setup` | `$zenith my tickets` |
+| Cursor | `@zenith update zenith` | `@zenith linear setup` | `@zenith my tickets` |
 
-Zenith then asks for a default team and an optional project, validates the choices, and saves them in your repo's `.agent-config`:
+1. **Enter your key when prompted.** Create a personal API key in [Linear Security & access](https://linear.app/settings/account/security). If Zenith directs you to Terminal, run the following command there. Paste the key at the hidden prompt, then return to your assistant and reply `done`. Keep the key out of chat.
+
+   ```bash
+   bash ~/.zenith/scripts/setup.sh --linear
+   ```
+
+2. **Choose your defaults.** Select your Linear team. Choose a project, or reply `none` to include tickets from across the team. Zenith saves these choices in the repo's `.agent-config`. All four clients reuse these defaults and the private key saved in `~/.zenith/.global-config` on the same machine.
+3. **Verify with `my tickets`.** Zenith lists the open issues assigned to you for the selected team and optional project. An empty list is valid if no issues match.
+
+For example, a repo configured for team `ENG` with no project filter has these settings:
 
 ```ini
 [linear]
@@ -322,9 +325,9 @@ linear_team = "ENG"
 linear_project = ""
 ```
 
-The team can be a key, name, or UUID. The project can be a name or UUID; leave it empty for no default project. Returning users reuse these settings without setup prompts. Explicit team and project selections override defaults for that request; existing-issue changes use the issue's actual team. Use `$zenith linear setup` to finish or change setup.
+The team can be a key, name, or UUID. The project can be a name or UUID. You can override either for one request or run `linear setup` to change your defaults. Existing issues use their own team.
 
-For CI or users who prefer environment configuration, `LINEAR_API_KEY` remains a fallback when no nonempty key is saved globally. An environment key is not copied to disk. No Linear SDK or additional package is required.
+Zenith stores the saved key as `linear_api_key` in the global config's `[linear]` section, with file permissions restricted to your user. For CI or users who prefer environment configuration, `LINEAR_API_KEY` remains a fallback when no nonempty key is saved globally. An environment key is not copied to disk. No Linear SDK or additional package is required.
 
 Use `$zenith` in Codex, `/zenith` in Claude Code and Gemini, or `@zenith` in Cursor:
 
@@ -399,13 +402,7 @@ jira_project = "AIE"
 
 ## Updates
 
-Zenith updates itself. A background job runs once a day:
-
-```
-0 9 * * * cd ~/.zenith && git fetch origin main --quiet && git reset --hard origin/main --quiet
-```
-
-Nothing to maintain.
+The installer schedules a daily update at 9 a.m. To update immediately, open your assistant in a repo and run `update zenith` with your client's Zenith prefix. See [Set up Linear](#set-up-linear) for the exact commands.
 
 ---
 
@@ -429,14 +426,11 @@ rm /path/to/repo/.agent-config
 Run `ls ~/.claude/commands/zenith.md` to check if the global symlink exists. If it's missing, re-run the install command.
 
 **`@zenith` not appearing in Cursor**
-Run `ls ~/.cursor/rules/zenith.mdc` to check if the rule is installed. If it's missing, run:
-```bash
-mkdir -p ~/.cursor/rules && ln -s ~/.zenith/.cursor/rules/zenith.mdc ~/.cursor/rules/zenith.mdc
-```
+Run `ls ~/.cursor/rules/zenith.mdc` to check if the rule is installed. If it's missing, rerun the [installer](#install).
 Then open Cursor Settings → Rules and confirm `zenith` appears with `alwaysApply: false`.
 
 **First-time setup not appearing**
-Make sure you're opening Claude Code from inside a git repository. Zenith detects the repo automatically — it won't run if there's no `.git/` folder in the tree.
+Open your coding assistant from inside a Git repository. If that repo already has an `.agent-config`, Zenith reuses it. For missing Linear credentials or team defaults, run your client's [Linear setup command](#set-up-linear).
 
 **Push rejected**
 Run `/zenith push failed`. Zenith will diagnose and fix the most common causes.

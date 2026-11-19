@@ -2,6 +2,8 @@
 # Handlers: INTENT_PUSH, INTENT_FIX_PUSH, INTENT_UPDATE_PR, INTENT_DRAFT_PR, INTENT_MERGE_COMPLETE
 # Read by ZENITH.md Step 4 router. See references/common-commands.md for CMD_* definitions.
 
+When the user requests a Linear association, read the "Linear issue links in PRs" section of `references/push-ops.md`. Apply it to ready PRs, drafts, and existing PR edits. Preserve the requested issue IDs and relationship throughout the workflow.
+
 ### INTENT_PUSH
 
 Run full diagnostic. Check situation.
@@ -139,12 +141,19 @@ pushing — sending your branch to GitHub
 
 If behind count from Step 1 diagnostics was ≥5, record pattern `push_behind_main` for `{github_org}/{github_repo}`.
 
+If an open PR already exists and the request includes a Linear association, update that PR using the linking procedure, report its URL, and stop. Do not create a second PR.
+
 Ask: "Open as draft PR or ready for review? [d/r]"
 
 If draft:
+
+Start with the last commit subject and the repository's PR template, if present. Apply requested Linear title IDs and description magic words using `references/push-ops.md`, then preview the resulting metadata and relationship effects. Set `$pr_title` and write the description to `$pr_body_file`; a requested association must not be dropped because the PR is a draft.
+
 ```bash
-gh pr create --draft --base {parent_branch} --head {current_branch} --title "{last_commit_message}" --body ""
+gh pr create --draft --base {parent_branch} --head {current_branch} --title "$pr_title" --body-file "$pr_body_file"
 ```
+
+Verify the saved PR title and body as described in the linking procedure when an association was requested.
 
 Print:
 ```
@@ -166,13 +175,17 @@ git log origin/{parent_branch}..HEAD --format="%s" | head -1
 git log origin/{parent_branch}..HEAD --reverse --format="- %s"
 ```
 
+Prepare the title and description, preserving any repository PR template. Apply requested Linear IDs and magic-word lines using `references/push-ops.md` before the preview. Set `$pr_title` and write the full description to `$pr_body_file`.
+
 Print:
 ```
 creating PR — {n} commit(s) ready for review
-│ title   {first_commit_subject}
+│ title   {title}
 │ body
-│   {commit_list}
+│   {body}
 ```
+
+For requested Linear associations, include each ID and its relationship effect in the preview.
 
 If stacked (`{parent_branch}` ≠ `{base_branch}`), add to the preview:
 ```
@@ -194,10 +207,14 @@ Stop.
 
 If edit: Ask "Title?" (press Enter to keep current), then "Description?" (press Enter to keep current). Update values.
 
+After edits, recheck the requested Linear links. If an edit removes or contradicts one, clarify whether the association should change before publishing. Refresh `$pr_title` and `$pr_body_file` with the final values.
+
 If y or after edit:
 ```bash
-gh pr create --base {parent_branch} --head {current_branch} --title "{title}" --body "{body}"
+gh pr create --base {parent_branch} --head {current_branch} --title "$pr_title" --body-file "$pr_body_file"
 ```
+
+Verify the saved title and body for requested Linear associations; do not infer successful Linear synchronization solely from PR creation.
 
 Print:
 ```
@@ -424,6 +441,8 @@ Next: "next: run /zenith push to continue"
 
 ### INTENT_UPDATE_PR
 
+If the request only associates Linear issues with an existing PR, follow the linking procedure in `references/push-ops.md`, report the PR URL, and finish. Skip the commit-message prompt and all Git mutations below, even if the working tree is dirty or the current branch is the base branch.
+
 Check situation. If on base_branch:
 ```
 blocked — you are on {base_branch}
@@ -455,31 +474,18 @@ git push origin {current_branch}   # CMD_PUSH_SIMPLE
 gh pr list --repo {github_org}/{github_repo} --head {current_branch} --state open --json url --jq '.[0].url'
 ```
 
+If the request also includes Linear associations, apply the linking procedure to that existing PR after the push. Preserve existing links and report a metadata-update failure separately from a successful code push.
+
 Print:
 ```
   ✓ pushed   {hash}  {message}
   PR         {pr_url}
 ```
 
-Next: "next: PR updated — reviewers will see the new commit"
+Next: "next: inspect the updated PR and any requested issue links"
 
 ### INTENT_DRAFT_PR
 
-Same as INTENT_PUSH but always opens as draft. Skips the [d/r] question.
-
-Execute the full INTENT_PUSH flow (commit if needed, sync, push), then:
-```bash
-gh pr create --draft --base {parent_branch} --head {current_branch} --title "{last_commit_message}" --body ""
-```
-
-Print:
-```
-opening draft PR — CI will run, reviewers not notified yet
-│ branch   {current_branch}
-│ base     {parent_branch}
-│ commits  {n} ahead of {parent_branch}
-
-  ✓ draft PR opened
-```
+Run INTENT_PUSH with the draft choice preselected, including its Linear linking procedure when requested. Skip the [d/r] question. Create exactly one draft PR through that flow, with the prepared title and description.
 
 Next: "next: when ready for review, say /zenith push — Zenith will mark the PR ready"

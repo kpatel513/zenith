@@ -28,6 +28,7 @@ EXPECTED_INTENT_FILES=(
     "intents/git-review.md"
     "intents/git-advanced.md"
     "intents/jira.md"
+    "intents/linear.md"
     "intents/meta.md"
 )
 
@@ -160,6 +161,8 @@ CHECK_FILES=(
     "$REPO_ROOT/intents/git-review.md"
     "$REPO_ROOT/intents/git-advanced.md"
     "$REPO_ROOT/intents/jira.md"
+    "$REPO_ROOT/intents/linear.md"
+    "$REPO_ROOT/references/linear-ops.md"
     "$REPO_ROOT/intents/meta.md"
 )
 
@@ -248,6 +251,7 @@ INTENT_FILES=(
     "$REPO_ROOT/intents/git-review.md"
     "$REPO_ROOT/intents/git-advanced.md"
     "$REPO_ROOT/intents/jira.md"
+    "$REPO_ROOT/intents/linear.md"
     "$REPO_ROOT/intents/meta.md"
 )
 

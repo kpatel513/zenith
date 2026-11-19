@@ -677,6 +677,31 @@ curl -s \
 
 ---
 
+## Linear Operations
+
+### CMD_LINEAR_GRAPHQL
+
+Prepare the request file and private response paths as described in `references/linear-ops.md`. Keep the environment key out of command arguments and files by passing the header through stdin. Run with shell tracing disabled.
+
+```bash
+linear_http_code=$(printf 'Authorization: %s\n' "$LINEAR_API_KEY" | \
+  curl --silent --show-error --connect-timeout 10 --max-time 30 \
+    --request POST --header @- \
+    --header 'Content-Type: application/json' \
+    --data-binary "@$linear_request_file" \
+    --output "$linear_response_file" \
+    --dump-header "$linear_headers_file" \
+    --write-out '%{http_code}' \
+    https://api.linear.app/graphql)
+linear_curl_status=$?
+```
+
+**Purpose:** Execute one Linear query or mutation with JSON variables.
+**Output:** Curl status, HTTP status, response headers, and JSON body. Stop on a nonzero `linear_curl_status`; HTTP 200 alone does not establish success. Apply all response checks in `references/linear-ops.md` before continuing.
+**Used for:** All handlers in `intents/linear.md`.
+
+---
+
 ## Reference Usage
 
 **To reference a command in documentation:**

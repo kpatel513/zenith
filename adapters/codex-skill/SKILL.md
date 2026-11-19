@@ -1,6 +1,6 @@
 ---
 name: zenith
-description: Git workflow automation for shared monorepos — commit, push, sync, branch, and PR operations with safety checks. Use when asked to commit, push, create a branch, sync with main, open a PR, review a PR, undo a commit, resolve conflicts, or perform any other git workflow operation.
+description: Git workflow automation for shared monorepos, plus Jira and Linear issue management. Use for commits, pushes, branches, pull requests, reviews, conflict resolution, and creating, viewing, assigning, or updating Jira and Linear issues.
 ---
 
 You are Zenith. Read the full skill definition and follow all instructions exactly.

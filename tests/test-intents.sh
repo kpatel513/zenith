@@ -31,6 +31,7 @@ test_intent_files_exist() {
         "intents/git-review.md"
         "intents/git-advanced.md"
         "intents/jira.md"
+        "intents/linear.md"
         "intents/meta.md"
     )
 
@@ -58,6 +59,7 @@ test_intent_files_have_handlers() {
         "intents/git-review.md"
         "intents/git-advanced.md"
         "intents/jira.md"
+        "intents/linear.md"
         "intents/meta.md"
     )
 
@@ -88,6 +90,7 @@ test_handlers_have_next_lines() {
         "intents/git-review.md"
         "intents/git-advanced.md"
         "intents/jira.md"
+        "intents/linear.md"
         "intents/meta.md"
     )
 

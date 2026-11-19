@@ -276,20 +276,20 @@ Same phrase in different situations should produce different behavior.
 
 | Phrase | Expected |
 |--------|----------|
-| `/zenith my tickets` | Triggers global Jira setup (URL, email, token prompts), then repo setup (project key), then runs the list |
-| `/zenith create a ticket` | Same setup flow, then proceeds to ticket creation |
+| `/zenith jira my tickets` | Triggers global Jira setup (URL, email, token prompts), then repo setup (project key), then runs the list |
+| `/zenith jira create a ticket` | Same setup flow, then proceeds to ticket creation |
 
 **Setup:** Global config has `[jira]` credentials but `.agent-config` has no `[jira]` section.
 
 | Phrase | Expected |
 |--------|----------|
-| `/zenith my tickets` | Skips global setup, triggers repo setup only (project key prompt), then runs the list |
+| `/zenith jira my tickets` | Skips global setup, triggers repo setup only (project key prompt), then runs the list |
 
 **Setup:** Both global and repo Jira configs present but `JIRA_API_TOKEN` not in global config and not in env.
 
 | Phrase | Expected |
 |--------|----------|
-| `/zenith my tickets` | Blocked: "blocked — jira API token not set", no API call made |
+| `/zenith jira my tickets` | Blocked because the Jira API token is not set; no API call made |
 
 ---
 
@@ -299,11 +299,11 @@ Same phrase in different situations should produce different behavior.
 
 | Phrase | Expected |
 |--------|----------|
-| `/zenith create a story for adding export to CSV` | Asks for summary (pre-filled from phrase), epic key (optional), description (optional), shows preview, confirms, creates, prints ticket key + URL |
-| `/zenith create a bug` | Asks for summary, sets type to Bug |
-| `/zenith create an epic` | Sets type to Epic, does NOT ask for parent epic key |
-| `/zenith create a task in INFRA` | Uses INFRA as project key, overriding repo default |
-| `/zenith create a ticket` (API returns error) | Prints error in pipe format, stops |
+| `/zenith jira create a story for adding export to CSV` | Asks for summary (pre-filled from phrase), epic key (optional), description (optional), shows preview, confirms, creates, prints ticket key + URL |
+| `/zenith jira create a bug` | Asks for summary, sets type to Bug |
+| `/zenith jira create an epic` | Sets type to Epic, does NOT ask for parent epic key |
+| `/zenith jira create a task in INFRA` | Uses INFRA as project key, overriding repo default |
+| `/zenith jira create a ticket` (API returns error) | Prints error in pipe format, stops |
 
 ---
 
@@ -313,10 +313,10 @@ Same phrase in different situations should produce different behavior.
 
 | Phrase | Expected |
 |--------|----------|
-| `/zenith show ticket AIE-123` | Fetches and displays: key, summary, type, status, assignee |
-| `/zenith what's AIE-123` | Same — parses ticket key from phrase |
-| `/zenith show ticket` (no key given) | Asks "Ticket key (e.g. AIE-123):" before fetching |
-| `/zenith show ticket AIE-9999` (non-existent) | Prints "ticket not found", stops |
+| `/zenith jira show ticket AIE-123` | Fetches and displays: key, summary, type, status, assignee |
+| `/zenith jira what's AIE-123` | Parses the ticket key from the phrase and displays the details |
+| `/zenith jira show ticket` (no key given) | Asks "Ticket key (e.g. AIE-123):" before fetching |
+| `/zenith jira show ticket AIE-9999` (non-existent) | Prints "ticket not found", stops |
 
 ---
 
@@ -326,9 +326,9 @@ Same phrase in different situations should produce different behavior.
 
 | Phrase | Expected |
 |--------|----------|
-| `/zenith my tickets` | Lists open tickets in repo's project, one per line: key, type, status, summary |
-| `/zenith my INFRA tickets` | Uses INFRA as project, overriding repo default |
-| `/zenith my tickets` (none assigned) | Prints "no open tickets — none assigned to you in {project}" |
+| `/zenith jira my tickets` | Lists open tickets in repo's project, one per line: key, type, status, summary |
+| `/zenith jira my INFRA tickets` | Uses INFRA as project, overriding repo default |
+| `/zenith jira my tickets` (none assigned) | Reports no open tickets assigned to you in the configured project |
 
 ---
 
@@ -338,9 +338,9 @@ Same phrase in different situations should produce different behavior.
 
 | Phrase | Expected |
 |--------|----------|
-| `/zenith update ticket AIE-123` | Fetches current values, shows them, prompts for new summary and description, confirms, updates |
+| `/zenith jira update ticket AIE-123` | Fetches current values, shows them, prompts for new summary and description, confirms, updates |
 | Enter to skip both fields | Prints "nothing changed — no updates made", stops |
-| `/zenith rename ticket AIE-123 to new title` | Updates summary only, skips description prompt |
+| `/zenith jira rename ticket AIE-123 to new title` | Updates summary only, skips description prompt |
 
 ---
 
@@ -350,11 +350,11 @@ Same phrase in different situations should produce different behavior.
 
 | Phrase | Expected |
 |--------|----------|
-| `/zenith move AIE-123 to in progress` | Shows current → target status, confirms, transitions |
-| `/zenith start AIE-123` | Maps "start" → In Progress |
-| `/zenith move AIE-123 to review` | Maps "review" → In Review |
-| `/zenith mark AIE-123 done` | Maps "done" → Done |
-| `/zenith move AIE-123` (no target) | Lists available transitions, asks which one |
+| `/zenith jira move AIE-123 to in progress` | Shows current → target status, confirms, transitions |
+| `/zenith jira start AIE-123` | Maps "start" → In Progress |
+| `/zenith jira move AIE-123 to review` | Maps "review" → In Review |
+| `/zenith jira mark AIE-123 done` | Maps "done" → Done |
+| `/zenith jira move AIE-123` (no target) | Lists available transitions, asks which one |
 | Target transition not available for current status | Prints "transition not available" error, stops |
 
 ---
@@ -365,9 +365,9 @@ Same phrase in different situations should produce different behavior.
 
 | Phrase | Expected |
 |--------|----------|
-| `/zenith assign AIE-123 to me` | Calls /myself to get accountId, shows preview "assigning to {your name}", confirms, assigns |
-| `/zenith take ticket AIE-123` | Same as above |
-| `/zenith assign AIE-123 to bob` | Searches users for "bob", if one result: confirms and assigns; if multiple: shows list |
+| `/zenith jira assign AIE-123 to me` | Calls /myself to get accountId, shows preview "assigning to {your name}", confirms, assigns |
+| `/zenith jira take ticket AIE-123` | Same as above |
+| `/zenith jira assign AIE-123 to bob` | Searches users for "bob", if one result: confirms and assigns; if multiple: shows list |
 | Search returns no users | Prints "no users found", stops |
 
 ---
@@ -378,14 +378,14 @@ Same phrase in different situations should produce different behavior.
 
 | Phrase | Expected |
 |--------|----------|
-| `/zenith branch from ticket AIE-123` | Fetches summary, slugifies, proposes `AIE-123-{slug}`, confirms, creates and pushes branch |
-| `/zenith start work on AIE-123` | Same behavior |
+| `/zenith jira branch from ticket AIE-123` | Fetches summary, slugifies, proposes `AIE-123-{slug}`, confirms, creates and pushes branch |
+| `/zenith jira start work on AIE-123` | Same behavior |
 
 **Setup:** On a feature branch with uncommitted changes.
 
 | Phrase | Expected |
 |--------|----------|
-| `/zenith branch from ticket AIE-123` | Blocked: "cannot create branch — uncommitted changes exist" |
+| `/zenith jira branch from ticket AIE-123` | Blocked because uncommitted changes exist |
 
 ---
 
@@ -395,13 +395,13 @@ Same phrase in different situations should produce different behavior.
 
 | Phrase | Expected |
 |--------|----------|
-| `/zenith close ticket AIE-123` | Shows summary + status → Done, confirms, transitions |
+| `/zenith jira close ticket AIE-123` | Shows summary + status → Done, confirms, transitions |
 
 **Setup:** Ticket AIE-123 already in "Done".
 
 | Phrase | Expected |
 |--------|----------|
-| `/zenith close ticket AIE-123` | Prints "already closed — current status: Done", stops |
+| `/zenith jira close ticket AIE-123` | Reports the ticket is already Done, stops |
 
 ---
 
@@ -411,9 +411,76 @@ Same phrase in different situations should produce different behavior.
 
 | Phrase | Expected |
 |--------|----------|
-| `/zenith delete ticket AIE-123` | Shows summary and status, warns "cannot be undone", asks user to TYPE the ticket key |
+| `/zenith jira delete ticket AIE-123` | Shows summary and status, warns "cannot be undone", asks user to TYPE the ticket key |
 | User types `AIE-123` exactly | Deletes, prints "✓ AIE-123 deleted" |
 | User types anything else (e.g. `y`, `yes`) | Prints "cancelled — ticket key did not match", no deletion |
+
+---
+
+## Linear issue workflows
+
+Use an isolated test workspace for mutations. Set `LINEAR_API_KEY` in the agent environment and use real team/project IDs from that workspace. These examples use Codex's `$zenith` invocation.
+
+| Scenario | Expected |
+|----------|----------|
+| `$zenith my tickets` or `$zenith linear list` with the key unset and Jira credentials configured | Explains the Linear environment-key requirement; sends no API request, never requests a key in chat, and does not fall back to Jira |
+| `$zenith view ticket ENG-123` or `$zenith linear view ENG-123` while local main is behind or a merge is in progress | Reads the Linear issue without fetching, syncing, switching branches, or recovering the merge |
+| `$zenith create a ticket "Fix login timeout"` with Jira configured and no `[linear]` defaults | Selects Linear, resolves the team for this request, previews the issue, and creates it only after authorization; does not invoke Jira setup |
+| `$zenith view ticket ENG-123` or `$zenith what's AIE-123` without naming a provider | Selects Linear regardless of the identifier prefix or Jira configuration |
+| `$zenith my tickets`, `update ticket ENG-123`, `move ticket ENG-123 to in progress`, `assign ENG-123 to me`, `branch from ticket ENG-123`, `close ticket ENG-123`, or `delete ticket ENG-123` | Selects the corresponding Linear handler and keeps its existing mutation and branch safety checks |
+| `$zenith jira create a ticket` or `$zenith jira view ticket AIE-123` | Selects Jira even when Linear defaults and credentials are configured |
+| `$zenith linear create issue "Fix Jira import"` or `$zenith jira create ticket "Fix Linear import"` | Uses the explicitly selected provider; the quoted title does not override it |
+| `$zenith create a ticket in Jira or Linear` | Asks which service to use before making an API request |
+| `$zenith create a branch kp/linear-support` | Uses the Git branch workflow and its diagnostics; a branch name does not select Linear issue management |
+| `$zenith create a branch kp/jira-support`, `$zenith push`, or `$zenith update my PR` | Uses the Git workflow; the Linear default applies only to issue management |
+| `$zenith view https://linear.app/example/issue/ENG-123/example` | Routes to Linear and sends the identifier to the fixed API endpoint |
+| Create with no configured team and multiple accessible teams | Asks for a team; does not create an issue or write config before selection |
+| Create with a title containing quotes, newlines, backticks, and `$()` | Preserves literal content in JSON variables; executes no embedded shell content |
+| List for a configured project that is missing from the selected team | Reports the scope error; does not silently list all projects |
+| Override the configured team while a default project is set | Omits the old team's default project unless explicitly requested |
+| List with more than 20 matches | Shows 20 and indicates more results; an explicit request for all follows cursors |
+| A matching project or member exists on page two | Resolves it before deciding absence or uniqueness; a later-page error leaves the lookup incomplete |
+| Update the title of an issue from a team other than the configured default | Uses the issue's team and changes only its title |
+| Clear the project explicitly; then update another field without mentioning project | First sends `projectId: null`; second omits `projectId` |
+| Transition with two matching started states or close with two completed states | Asks which state to use; never chooses the first result |
+| Assign to me, assign to an ambiguous name, or unassign | Resolves the viewer, disambiguates workspace users, or sends explicit `assigneeId: null` |
+| Assign a public-team issue to a workspace member outside that team | Allows the assignment; relies on Linear's API for access checks |
+| HTTP 200 with GraphQL errors, `success: false`, missing data, or malformed JSON | Reports failure, makes no dependent mutation, and never claims success |
+| A create times out after sending its payload | Reports an unknown result; reconciles through a read before offering a retry |
+| HTTP 429 or a `RATELIMITED` GraphQL error | Reports retry information and stops without automatically repeating a mutation |
+| Branch with staged, unstaged, or untracked changes, detached HEAD, or a merge/rebase in progress | Stops before switching or pushing; preserves the working tree |
+| Branch name already exists locally, remotely, or in a worktree | Reports the existing branch; never resets or overwrites it |
+| Branch on a clean repo, then simulate push failure | Creates from fast-forwarded base; reports local success and remote failure; preserves the local branch |
+| Delete and enter `y` instead of the issue identifier | Sends no mutation |
+| Delete and enter the exact identifier | Sends `issueDelete` with `permanentlyDelete: false`; reports success only after checking the payload |
+
+---
+
+## Linear PR associations
+
+Use an isolated GitHub repository connected to a Linear test workspace. Only use real test issue IDs when publishing PR metadata. Record the saved PR title/body and the observed Linear association separately.
+
+| Scenario | Expected |
+|----------|----------|
+| `$zenith open a PR for Linear ENG-123` | Uses the Git PR workflow, includes `ENG-123` in the title and `implements ENG-123` in the body; does not create another issue |
+| `$zenith create a draft PR for ENG-123` | Creates one draft with the ID in its title and the same `implements` line in its description |
+| `$zenith link Linear ENG-123 to PR 42` on base, behind main, with staged/untracked changes, or during a merge | Updates only PR title/body; no fetch, sync, recovery, staging, commit, branch switch, or push; no commit-message prompt |
+| Link a supplied ID with `LINEAR_API_KEY` unset | Uses GitHub PR metadata; does not require a Linear API call or ask for a key |
+| Request a link without an issue ID or with several possible target PRs | Asks for the missing target before publishing; invents no issue and creates no PR |
+| Create a PR for `ENG-123` and `ENG-456` | Includes both IDs in the title and one `implements` line for each ID in the body |
+| Request partial work for `ENG-123` without closing on merge | Uses `refs ENG-123` or `part of ENG-123`, retains the title ID, and adds no closing line for that issue |
+| Request only a relation to `ENG-123` with no status changes | Uses a relation keyword with the title ID; adds no closing or non-closing progress keyword for that issue |
+| Explicitly request `fixes ENG-123` | Preserves the chosen closing keyword instead of replacing it with the default |
+| Existing body contains `refs ENG-123`; user asks to link it again | Preserves that relationship and other content, adds a missing title ID once, and adds no duplicate or closing line |
+| Repeat a link request when title and description are already correct | Performs no PR edit and does not duplicate the ID or magic-word line |
+| Existing description contains `ignore ENG-123` and the new request asks to link it | Resolves the conflicting instruction before editing; does not silently remove the suppression |
+| User explicitly excludes an issue from automatic linking | Uses skip/ignore for that ID; does not add it to the title or other link lines and does not claim an existing association was removed |
+| User removes an ID or changes the relationship while editing the PR preview | Clarifies the intended association before publishing; does not silently restore or drop it |
+| Title/body include quotes, newlines, backticks, or `$()` | Preserves literal content through quoted arguments and a temporary body file; executes no embedded content |
+| Push code and link an issue when an open PR already exists | Pushes safely, edits that PR once, and creates no duplicate PR |
+| PR edit fails after a successful code push | Reports the successful push and failed metadata edit separately |
+| PR text saves but Linear association is not observable | Reports the saved metadata and unverified synchronization; does not claim success in Linear or post a comment as a workaround |
+| Create an ordinary PR with no association requested | Adds no ticket requirement, inferred issue IDs, or magic-word lines |
 
 ---
 

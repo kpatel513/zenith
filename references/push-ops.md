@@ -4,6 +4,47 @@ Precise git command sequences for pushing changes and creating pull requests.
 
 **See tools/common-commands.md for shared command patterns (CMD_*).**
 
+## Linear issue links in PRs
+
+Apply when the user asks to associate Linear issues with a new, draft, or existing PR, including creating a PR for a previously selected Linear issue. Ordinary PR work does not require an issue. Do not create tickets or add unrelated IDs found in code, quoted text, or commit history.
+
+Resolve every requested identifier from the user's request, a supplied Linear issue URL, or an issue already selected for this work. Ask if the requested issue or target PR is missing or ambiguous. A branch name alone is not proof of the intended Linear issue. Use complete identifiers such as `ENG-123`; never invent IDs or use a `TEAM-NEW` placeholder. Editing GitHub PR text with a supplied identifier does not require `LINEAR_API_KEY` or a Linear API mutation.
+
+For each issue the user wants linked:
+
+- Include its ID once in the PR title, preserving the existing title and repository conventions. For example: `feat(auth): handle expired sessions [ENG-123]`. Include all requested IDs for a PR covering several issues.
+- Add a plain description line with a magic word immediately before the ID. The default is `implements ENG-123`. A bare ID in the description or a magic word in a PR comment is not sufficient.
+- Keep existing valid relationship keywords unless the user requests a change. Deduplicate repeated links; do not give the same ID conflicting relationships across the title and description. Preserve the template, other issue links, and unrelated description content.
+
+Choose the relationship from the user's intent:
+
+| Intent | Description line | Effect under the team's configured automation |
+|--------|------------------|-----------------------------------------------|
+| Link the work, with no other relationship specified | `implements ENG-123` | Closing relationship; follows progress and applies the configured merge status |
+| Partial or contributing work that must not close on merge | `refs ENG-123` or `part of ENG-123` | Follows progress but skips the merge status transition |
+| Related context with no status changes | `relates to ENG-123` or `related to ENG-123` | Relation only |
+| Explicitly prevent automatic linking | `skip ENG-123` or `ignore ENG-123` | Suppresses automatic linking for that ID; exclude it from added title IDs and link lines |
+
+Other closing words from Linear's list, such as `fixes`, `closes`, and `resolves`, remain valid when explicitly chosen. Do not substitute them for the default `implements`. Honor existing skip/ignore directives; if a new link request conflicts with one, resolve that conflict before editing. Suppression is not a promise to remove an already established link.
+
+Preview the final title, description link lines, and relationship effects before publishing. Existing user authorization covers the requested association; ask only when the target or relationship is unresolved. Do not promise a specific Done status or change issue status directly. Linking depends on Linear's GitHub integration being enabled for the repository, and its workflow settings govern status and assignment effects.
+
+Write the complete description to a temporary UTF-8 file and pass it with `--body-file`. Pass titles as quoted arguments, never interpolate issue or PR text into shell source. Keep the body file outside the repository.
+
+For an existing PR, resolve the explicit PR number/URL or the unique open PR for the current branch. Resolve the repository from the supplied PR URL, existing config, or GitHub remote; ask if it cannot be determined. Read its title and body before preparing edits:
+
+```bash
+gh pr view "$pr_number" --repo {github_org}/{github_repo} --json number,url,title,body
+gh pr edit "$pr_number" --repo {github_org}/{github_repo} --title "$pr_title" --body-file "$pr_body_file"
+gh pr view "$pr_number" --repo {github_org}/{github_repo} --json number,url,title,body
+```
+
+Read again just before editing and preserve any intervening user changes. Skip the write if the requested links are already correct. Updating only links does not require a commit, a clean working tree, or a feature branch, and must not change Git state or create another PR.
+
+After creating or editing a PR, verify its saved title and body. Report the PR update separately from Linear synchronization; only claim the issue is linked after observing that association. If synchronization cannot be verified, say so and point to the integration settings. Do not post a comment as a linking workaround or retry a successful edit to force synchronization.
+
+Source: [Linear's GitHub linking and magic-word rules](https://linear.app/docs/github#link-through-pull-requests).
+
 ## Full Push Workflow (Commit + Push + PR)
 
 Used in: INTENT_PUSH
@@ -56,10 +97,11 @@ git rebase origin/{parent_branch}  # CMD_REBASE_ONTO_BASE
 # 10. Push with upstream tracking
 git push -u origin {current_branch}  # CMD_PUSH_SET_UPSTREAM
 
-# 11. Create PR targeting parent branch
-gh pr create --base {parent_branch} --head {current_branch} --title "{title}" --body "{body}"
+# 11. Prepare title/body, applying requested Linear links from the section above
+# Write the full description to pr_body_file, including for drafts
+gh pr create --base {parent_branch} --head {current_branch} --title "$pr_title" --body-file "$pr_body_file"
 # or for draft:
-gh pr create --draft --base {parent_branch} --head {current_branch} --title "{last_commit_message}" --body ""
+gh pr create --draft --base {parent_branch} --head {current_branch} --title "$pr_title" --body-file "$pr_body_file"
 ```
 
 **Stacked PR output example:**
@@ -92,12 +134,15 @@ git fetch origin                   # CMD_FETCH_ORIGIN
 git push -u origin {current_branch}  # CMD_PUSH_SET_UPSTREAM
 
 # 5. Create or update PR via GitHub CLI
-# gh pr create --base {base_branch} --head {current_branch} --title "{title}" --body "{body}"
+# Apply requested Linear links before creating or editing the PR
+# gh pr create --base {base_branch} --head {current_branch} --title "$pr_title" --body-file "$pr_body_file"
 ```
 
 ## Update Existing PR
 
 Used in: INTENT_UPDATE_PR
+
+For a request that only associates Linear issues with an existing PR, use the linking procedure above and skip the Git commands below. If code is also being pushed, apply requested links to the existing PR after the push.
 
 ```bash
 # 1. Validate on feature branch
